@@ -1,8 +1,8 @@
 import argparse
 import os
-import shutil
 from importlib import import_module
-from typing import Dict, List, Tuple
+from pathlib import Path
+from typing import Dict, List
 
 import torch
 import yaml
@@ -49,94 +49,27 @@ def collect_output_keys(config: Dict) -> List[str]:
     return sorted(output_keys)
 
 
-def get_device_and_dtype(dtype: str) -> Tuple[str, torch.dtype]:
-    """Return device string and torch dtype for export."""
-    if dtype == "float16":
-        return "cuda", torch.float16
-    return "cpu", torch.float32
+def discover_checkpoints(root: Path) -> List[Path]:
+    """Find all checkpoint directories under root (contain pytorch_model.bin)."""
+    found = []
+    for dirpath, _, filenames in os.walk(root):
+        if "pytorch_model.bin" in filenames and "config.yaml" in filenames:
+            found.append(Path(dirpath))
+    return sorted(found)
 
 
-def export_backbone(
-    checkpoint_dir: str,
-    config: Dict,
-    output_dir: str,
-    dtype: str = "float32",
+def export_checkpoint(
+    checkpoint_dir: Path,
+    out_base: Path,
 ) -> None:
-    """Export backbone embedder using torch.export.
+    """Export all prediction heads from one checkpoint to ONNX.
 
     Args:
-        checkpoint_dir: Path to checkpoint directory
-        config: Model configuration
-        output_dir: Directory to save exported model
-        dtype: Data type for export (float32 or float16)
+        checkpoint_dir: Path to the individual checkpoint directory.
+        out_base: Base output path (without extension). A single head is saved
+                  as ``out_base.onnx``; multiple heads as ``out_base_{name}.onnx``.
     """
-    device, torch_dtype = get_device_and_dtype(dtype)
-    print(f"Exporting backbone to {output_dir} (device: {device}, dtype: {dtype})...")
-
-    Embedder = getattr(import_module("model.embedder"), "Embedder")
-
-    bb_params = config["config"]["backbone"]
-    embedder = Embedder(
-        backbone_name=bb_params["name"],
-        prefix_token=bb_params["prefix_token"],
-        tokeniser_type=bb_params["tokeniser_type"],
-        model_type=bb_params["model_type"],
-    )
-    embedder.load_embedder()
-
-    adapter_path = os.path.join(checkpoint_dir, "adapter_config.json")
-    if os.path.exists(adapter_path):
-        embedder.model.load_adapter(checkpoint_dir, "default")
-
-    embedder.eval()
-    embedder = embedder.to(device).to(torch_dtype)
-
-    batch_size = 2
-    example_seq_len = 128
-    example_input_ids = torch.randint(
-        0, 1000, (batch_size, example_seq_len), dtype=torch.long, device=device
-    )
-    example_attention_mask = torch.ones(
-        (batch_size, example_seq_len), dtype=torch.long, device=device
-    )
-
-    with torch.inference_mode():
-        dynamic_shapes = (
-            {0: torch.export.Dim("batch"), 1: torch.export.Dim("seq_len")},  # input_ids
-            {
-                0: torch.export.Dim("batch"),
-                1: torch.export.Dim("seq_len"),
-            },
-        )
-        exported_program = torch.export.export(
-            embedder,
-            (example_input_ids, example_attention_mask),
-            dynamic_shapes=dynamic_shapes,
-        )
-
-        backbone_path = os.path.join(output_dir, f"backbone_{dtype}.pt2")
-        torch.export.save(exported_program, backbone_path)
-        print(f"Backbone exported to {backbone_path}")
-
-
-def export_heads(
-    checkpoint_dir: str,
-    config: Dict,
-    output_dir: str,
-    dtype: str = "float32",
-) -> None:
-    """Export prediction heads using torch.export.
-
-    Args:
-        checkpoint_dir: Path to checkpoint directory
-        config: Model configuration
-        output_dir: Directory to save exported model
-        dtype: Data type for export (float32 or float16)
-    """
-    device, torch_dtype = get_device_and_dtype(dtype)
-    print(
-        f"Exporting prediction heads to {output_dir} (device: {device}, dtype: {dtype})..."
-    )
+    config = load_config(str(checkpoint_dir))
 
     build_prediction_heads = getattr(
         import_module("model.build_model"), "build_prediction_heads"
@@ -149,114 +82,115 @@ def export_heads(
 
     model = UdonPred(None, prediction_heads, output_keys)
 
-    state_path = os.path.join(checkpoint_dir, "pytorch_model.bin")
+    state_path = checkpoint_dir / "pytorch_model.bin"
     model.load_state_dict(
-        torch.load(state_path, weights_only=True, map_location="cpu"),
+        torch.load(str(state_path), weights_only=True, map_location="cpu"),
         strict=False,
     )
-
     model.eval()
 
-    model = model.to(device).to(torch_dtype)
+    out_base.parent.mkdir(parents=True, exist_ok=True)
+
     hidden_dim = config["config"]["input_dim"]
+    example_embeddings = torch.randn(2, 128, hidden_dim)
 
-    batch_size = 2
-    example_seq_len = 128
-    example_embeddings = torch.randn(
-        batch_size, example_seq_len, hidden_dim, dtype=torch_dtype, device=device
-    )
-
+    heads = list(model.prediction_heads.items())
     exported_heads = []
-
-    for head_name, prediction_head in model.prediction_heads.items():
-        print(f"  Exporting head: {head_name}")
+    for head_name, prediction_head in heads:
         prediction_head.eval()
+        if len(heads) == 1:
+            out_path = out_base.with_suffix(".onnx")
+        else:
+            out_path = out_base.parent / f"{out_base.name}_{head_name}.onnx"
 
         with torch.no_grad():
-            dynamic_shapes = (
-                {0: torch.export.Dim("batch"), 1: torch.export.Dim("seq_len")},
-            )
-            exported_program = torch.export.export(
+            torch.onnx.export(
                 prediction_head,
                 (example_embeddings,),
-                dynamic_shapes=dynamic_shapes,
+                str(out_path),
+                dynamo=True,
+                input_names=["embedding"],
+                output_names=["score"],
+                dynamic_shapes=(
+                    {0: torch.export.Dim("batch"), 1: torch.export.Dim("seq_len")},
+                ),
+                external_data=False,
+                optimize=True,
             )
+        print(f"    Saved → {out_path}")
+        exported_heads.append(head_name)
 
-            head_path = os.path.join(output_dir, f"head_{head_name}_{dtype}.pt2")
-            torch.export.save(exported_program, head_path)
-            print(f"Exported to {head_path}")
-            exported_heads.append(head_name)
-
-    print(f"Heads exported: {', '.join(exported_heads)}")
+    print(f"    Heads exported: {', '.join(exported_heads)}")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Export optimized model components using torch.export"
+        description="Export prediction heads to ONNX from one or more checkpoints."
     )
-    parser.add_argument("checkpoint", type=str, help="Path to checkpoint directory")
+    parser.add_argument(
+        "checkpoint_root",
+        type=str,
+        help="Root folder containing checkpoint subdirectories.",
+    )
     parser.add_argument(
         "--output-dir",
         "-o",
         type=str,
+        required=True,
+        help="Output directory for exported ONNX models.",
+    )
+    parser.add_argument(
+        "--checkpoints",
+        "-c",
+        nargs="+",
         default=None,
-        help="Output directory for exported models (default: checkpoint_dir/exported)",
-    )
-    parser.add_argument(
-        "--dtype",
-        type=str,
-        default="both",
-        choices=["float32", "float16", "both"],
-        help="Data type for export (default: float32). Use float16 for GPU inference, float32 for CPU, or both for both versions.",
-    )
-    parser.add_argument(
-        "--backbone-only", action="store_true", help="Export only the backbone"
-    )
-    parser.add_argument(
-        "--heads-only", action="store_true", help="Export only the prediction heads"
+        metavar="REL_PATH",
+        help=(
+            "Relative paths of specific checkpoints to export "
+            "(default: all discovered checkpoints)."
+        ),
     )
 
     args = parser.parse_args()
 
-    if not os.path.isdir(args.checkpoint):
-        raise ValueError(f"Checkpoint directory not found: {args.checkpoint}")
+    root = Path(args.checkpoint_root)
+    if not root.is_dir():
+        raise ValueError(f"Checkpoint root not found: {root}")
 
-    output_dir = args.output_dir or os.path.join(args.checkpoint, "exported")
-    os.makedirs(output_dir, exist_ok=True)
+    output_root = Path(args.output_dir)
 
-    config = load_config(args.checkpoint)
+    if args.checkpoints:
+        checkpoints = [root / rel for rel in args.checkpoints]
+        for cp in checkpoints:
+            if not cp.is_dir():
+                raise ValueError(f"Checkpoint directory not found: {cp}")
+            if not (cp / "pytorch_model.bin").exists():
+                raise ValueError(f"pytorch_model.bin missing in: {cp}")
+    else:
+        checkpoints = discover_checkpoints(root)
+        if not checkpoints:
+            raise ValueError(f"No checkpoints found under: {root}")
+        print(f"Discovered {len(checkpoints)} checkpoint(s).")
 
-    config_src = os.path.join(args.checkpoint, "config.yaml")
-    config_dst = os.path.join(output_dir, "config.yaml")
-    shutil.copy2(config_src, config_dst)
-    print(f"Config copied to {config_dst}")
+    # Group by parent so we know whether to include the checkpoint suffix.
+    from collections import defaultdict
 
-    export_backbone_flag = not args.heads_only
-    export_heads_flag = not args.backbone_only
+    by_parent: dict = defaultdict(list)
+    for cp in checkpoints:
+        by_parent[cp.parent].append(cp)
 
-    dtypes_to_export = ["float32", "float16"] if args.dtype == "both" else [args.dtype]
+    for checkpoint_dir in checkpoints:
+        rel = checkpoint_dir.relative_to(root)
+        siblings = by_parent[checkpoint_dir.parent]
+        if len(siblings) == 1:
+            name = str(rel.parent).replace("/", "_")
+        else:
+            name = str(rel).replace("/", "_")
+        out_base = output_root / name
+        print(f"Exporting {rel} → {out_base}.onnx")
+        export_checkpoint(checkpoint_dir, out_base)
 
-    for dtype in dtypes_to_export:
-        if len(dtypes_to_export) > 1:
-            print(f"Exporting {dtype} version")
-
-        if export_backbone_flag:
-            export_backbone(
-                args.checkpoint,
-                config,
-                output_dir,
-                dtype=dtype,
-            )
-
-        if export_heads_flag:
-            export_heads(
-                args.checkpoint,
-                config,
-                output_dir,
-                dtype=dtype,
-            )
-
-    print(f"Export done: Models saved to {output_dir}")
+    print(f"Done. Models saved to {output_root}")
 
 
 if __name__ == "__main__":

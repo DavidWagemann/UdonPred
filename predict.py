@@ -3,10 +3,20 @@ import re
 import sys
 from importlib import import_module
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
-import yaml
+import numpy as np
+import onnxruntime as ort
+import torch
+from scipy.ndimage import gaussian_filter1d
 from tqdm import tqdm
+
+BACKBONE_NAME = "Rostlab/ProstT5_fp16"
+BACKBONE_MODEL_TYPE = "T5EncoderModel"
+BACKBONE_TOKENIZER_TYPE = "T5Tokenizer"
+PREFIX_TOKEN = "<AA2fold>"
+
+_NONSTANDARD = re.compile(r"[UZOB*]")
 
 
 def read_fasta(path: str) -> List[Tuple[str, str]]:
@@ -34,22 +44,12 @@ def read_fasta(path: str) -> List[Tuple[str, str]]:
     return entries
 
 
-def load_config(model_dir: str | Path, config_name: str = "config") -> Dict:
-    """Load configuration from export directory."""
-    export_path = Path(model_dir)
-    config_path = export_path / f"{config_name}.yaml"
-    if not config_path.exists():
-        raise FileNotFoundError(f"{config_name}.yaml not found at: {config_path}")
-    with config_path.open("r") as f:
-        return yaml.safe_load(f)
-
 def format_predictions(
     header: str,
     sequence: str,
     scores,
 ) -> List[str]:
     lines: List[str] = [f">{header}\n"]
-
     for idx, (aa, row) in enumerate(zip(sequence, scores), start=1):
         if hasattr(row, "__len__") and not isinstance(row, str):
             val = row[0] if len(row) > 0 else 0.0
@@ -59,8 +59,7 @@ def format_predictions(
     return lines
 
 
-def resolve_device(torch, device: str) -> str:
-    """Resolve device string to actual device."""
+def resolve_device(device: str) -> str:
     if device == "auto":
         return "cuda" if torch.cuda.is_available() else "cpu"
     if device == "cuda":
@@ -71,25 +70,6 @@ def resolve_device(torch, device: str) -> str:
         return "cpu"
     raise ValueError("Device must be one of: auto, cpu, cuda")
 
-
-def resolve_device_dtype(torch, device: str) -> Tuple[str, str]:
-    """Resolve device and dtype for inference."""
-    torch_device = resolve_device(torch, device)
-    dtype = "float16" if torch_device == "cuda" else "float32"
-    return torch_device, dtype
-
-
-def tokenize_batch(embedder, seqs: List[str], torch_device: str):
-    input_ids, attention_mask = embedder.tokenise(seqs)
-    return input_ids.to(torch_device), attention_mask.to(torch_device)
-
-
-def run_backbone(
-    backbone, input_ids, attention_mask, prefix_len: int, max_seq_len: int
-):
-    emb = backbone(input_ids, attention_mask)
-    emb = emb * attention_mask.unsqueeze(-1)
-    return emb[:, prefix_len : prefix_len + max_seq_len, :]
 
 def iter_batches(items: List[Tuple[str, str]], max_total_len: int):
     batch: List[Tuple[str, str]] = []
@@ -108,6 +88,7 @@ def iter_batches(items: List[Tuple[str, str]], max_total_len: int):
             total_len = 0
     if batch:
         yield batch
+
 
 def count_batches(items: List[Tuple[str, str]], max_total_len: int) -> int:
     count = 0
@@ -128,43 +109,82 @@ def count_batches(items: List[Tuple[str, str]], max_total_len: int) -> int:
     return count
 
 
+def load_tokenizer():
+    tokeniser_base = getattr(import_module("transformers"), BACKBONE_TOKENIZER_TYPE)
+    return tokeniser_base.from_pretrained(
+        BACKBONE_NAME,
+        use_fast=False,
+        do_lower_case=False,
+        legacy=True,
+    )
+
+
+def load_backbone(torch_device: str, dtype):
+    backbone_base = getattr(import_module("transformers"), BACKBONE_MODEL_TYPE)
+    model = backbone_base.from_pretrained(BACKBONE_NAME)
+    model.config.output_attentions = False
+    model.config.output_hidden_states = False
+    return model.eval().to(torch_device).to(dtype)
+
+
+def tokenize_batch(
+    tokenizer,
+    seqs: List[str],
+    torch_device: str,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    texts = [
+        f"{PREFIX_TOKEN} " + " ".join(list(_NONSTANDARD.sub("X", seq))) for seq in seqs
+    ]
+    encoding = tokenizer.batch_encode_plus(
+        texts,
+        add_special_tokens=True,
+        padding="longest",
+        return_tensors="pt",
+    )
+    return encoding["input_ids"].to(torch_device), encoding["attention_mask"].to(
+        torch_device
+    )
+
+
+def load_head(onnx_path: Path, torch_device: str) -> ort.InferenceSession:
+    providers = (
+        ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        if torch_device == "cuda"
+        else ["CPUExecutionProvider"]
+    )
+    opts = ort.SessionOptions()
+    opts.log_severity_level = 3
+    return ort.InferenceSession(str(onnx_path), sess_options=opts, providers=providers)
+
+
 def run_exported(
     entries: List[Tuple[str, str]],
     model_dir: str,
     target: str,
-    config: Dict,
     max_total_seq_len: int,
     output_path: str | None,
     device: str,
+    smooth: float = 1.5,
 ) -> None:
-    """Run prediction using exported models."""
-    torch = import_module("torch")
-    Embedder = getattr(import_module("model.embedder"), "Embedder")
+    """Run prediction using the HuggingFace backbone and ONNX prediction head."""
+    torch_device = resolve_device(device)
+    torch_dtype = torch.float16 if torch_device == "cuda" else torch.float32
 
-    torch_device, dtype = resolve_device_dtype(torch, device)
+    prefix_token_len = 1
 
-    bb_params = config["config"]["backbone"]
+    print(f"Loading tokenizer ({BACKBONE_NAME}) ...")
+    tokenizer = load_tokenizer()
 
-    export_path = Path(model_dir)
-    backbone_path = export_path / f"backbone_{dtype}.pt2"
-    if not backbone_path.exists():
-        raise FileNotFoundError(f"Exported backbone not found: {backbone_path}")
+    print(f"Loading backbone ({BACKBONE_NAME}) ...")
+    backbone = load_backbone(torch_device, torch_dtype)
 
-    backbone = torch.export.load(backbone_path).module()
-
-    head_path = export_path / f"{target}_{dtype}.pt2"
-    if not head_path.exists():
-        raise FileNotFoundError(f"Exported head not found: {head_path}")
-    head = torch.export.load(head_path).module()
-
-    embedder = Embedder(
-        backbone_name=bb_params["name"],
-        prefix_token=bb_params["prefix_token"],
-        tokeniser_type=bb_params["tokeniser_type"],
-        model_type=bb_params["model_type"],
-    )
-    embedder.load_tokeniser()
-    prefix_token_len = embedder.prefix_token_len
+    onnx_path = Path(model_dir) / f"{target}.onnx"
+    if not onnx_path.exists():
+        raise FileNotFoundError(f"ONNX head not found: {onnx_path}")
+    print(f"Loading head ({onnx_path}) ...")
+    head = load_head(onnx_path, torch_device)
+    head_input_name = head.get_inputs()[0].name
+    head_output_name = head.get_outputs()[0].name
 
     if output_path:
         out_dir = Path(output_path)
@@ -172,28 +192,33 @@ def run_exported(
     else:
         out_dir = None
 
+    total_batches = count_batches(entries, max_total_seq_len)
     with torch.inference_mode():
-        total_batches = count_batches(entries, max_total_seq_len)
         for batch in tqdm(
             iter_batches(entries, max_total_seq_len), total=total_batches
         ):
             headers, seqs = zip(*batch)
             seqs = list(seqs)
             max_seq_len = max(len(s) for s in seqs)
-            input_ids, attention_mask = tokenize_batch(embedder, seqs, torch_device)
 
-            emb = run_backbone(
-                backbone, input_ids, attention_mask, prefix_token_len, max_seq_len
-            )
+            input_ids, attention_mask = tokenize_batch(tokenizer, seqs, torch_device)
 
-            predictions = head(emb)
-            batch_scores = predictions.cpu().numpy()
+            hidden = backbone(
+                input_ids, attention_mask=attention_mask
+            ).last_hidden_state
+            hidden = hidden * attention_mask.unsqueeze(-1)
+            emb = hidden[:, prefix_token_len : prefix_token_len + max_seq_len, :]
 
-            for header, seq, scores in zip(headers, seqs, batch_scores):
+            emb_np = emb.float().cpu().numpy()
+            scores_batch = head.run([head_output_name], {head_input_name: emb_np})[0]
+
+            for header, seq, scores in zip(headers, seqs, scores_batch):
                 scores_seq = scores[: len(seq)]
-                formatted_lines = format_predictions(
-                    header, seq, scores_seq
-                )
+                if smooth > 0:
+                    scores_seq = gaussian_filter1d(
+                        scores_seq.astype(np.float64), sigma=smooth, axis=0
+                    )
+                formatted_lines = format_predictions(header, seq, scores_seq)
                 if out_dir:
                     safe_header = header.replace("/", "_").replace("|", "_")
                     file_path = out_dir / f"{safe_header}.caid"
@@ -203,41 +228,20 @@ def run_exported(
                     sys.stdout.writelines(formatted_lines)
 
 
-def collect_output_keys(config: Dict) -> List[str]:
-    """Collect output keys from configuration."""
-    output_keys = set()
-    for ds in config.get("data", {}):
-        if config["data"][ds].get("fraction", 0) > 0:
-            keys = set()
-            if "losses" in config["data"][ds]:
-                for key_losses in config["data"][ds]["losses"].values():
-                    for loss in key_losses:
-                        keys.add(loss["output"])
-            if "metrics" in config["data"][ds]:
-                for key_metrics in config["data"][ds]["metrics"].values():
-                    for metric in key_metrics:
-                        keys.add(metric["output"])
-            output_keys |= keys
-    outputs = config.get("config", {}).get("outputs")
-    if outputs:
-        return list(outputs)
-    return sorted(output_keys)
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Predict using exported optimized models for faster inference."
+        description="Predict different definitions of protein disorder."
     )
     parser.add_argument("fasta", type=str, help="Path to input FASTA file")
-    parser.add_argument("model_dir", type=str, help="Directory with exported models")
+    parser.add_argument(
+        "model_dir", type=str, help="Directory containing ONNX head files"
+    )
     parser.add_argument(
         "--target",
         "-t",
         type=str,
         default="trizod",
-        choices=["trizod", "chezod", "softdis", "pdbflex", "atlas", "plddt", "disprot"],
-        help="Prediction Type (selects model trained on the specified dataset)"
-
+        help="Prediction type — must match a {target}.onnx file in model_dir",
     )
     parser.add_argument(
         "--output",
@@ -259,9 +263,16 @@ def main() -> None:
         type=str,
         default="auto",
         choices=["auto", "cpu", "cuda"],
-        help="Device for inference (auto, cpu, cuda). Dtype will be selected automatically.",
+        help="Device for inference (auto, cpu, cuda).",
     )
-
+    parser.add_argument(
+        "--smooth",
+        "-s",
+        type=float,
+        default=1.5,
+        metavar="SIGMA",
+        help="Sigma for Gaussian smoothing applied to per-residue scores (0 to disable, default: 1.5)",
+    )
 
     args = parser.parse_args()
 
@@ -272,18 +283,16 @@ def main() -> None:
     entries = sorted(entries, key=lambda item: len(item[1]), reverse=True)
 
     if not Path(args.model_dir).is_dir():
-        raise ValueError("Export directory not found.")
-
-    config = load_config(args.model_dir, args.target)
+        raise ValueError("Model directory not found.")
 
     run_exported(
         entries,
         args.model_dir,
         args.target,
-        config,
         args.batch_size,
         args.output,
         args.device,
+        args.smooth,
     )
 
 
