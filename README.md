@@ -8,45 +8,31 @@ The training data can be found on [here](https://doi.org/10.6084/m9.figshare.314
 
 For the old version submitted to CAID3 go to [https://github.com/jschlensok/udonpred](https://github.com/jschlensok/udonpred).
 
-## Installation
-1. `git clone https://github.com/DavidWagemann/UdonPred.git`
-2. `cd UdonPred`
-3. `uv sync`
-
 ## Usage
-`uv run predict.py {path to fasta} {path to weights}`
+### Docker
+The quickest way to run UdonPred is via Docker. The image is inference-only: it
+bundles the predictor code and the small ONNX prediction heads, and consumes
+**precomputed ProstT5 embeddings** (`.npy`/`.h5`) on CPU.
 
-You can use the following options:
-- `--target`: chooses the model trained on the specified dataset (trizod, chezod, softdis, pdbflex, atlas, plddt, disprot). The default is trizod.
-- `--output`: sets the output directory path. Each sequence will be saved as a .caid file. The output will be written to the terminal if this is not set.
-- `--batch-size`: sets the total sequence length per batch. Try reducing this if you get an out of memory error.
-- `--device`: sets the device used for inference (cpu or cuda). Uses cuda by default if available.
-- `--smooth`: Applies gaussian smoothing with the give sigma to the results in order to remove prediction noise. 
+Build the image:
+```
+docker build -t udonpred .
+```
 
-## CAID4 / Precomputed-embedding Predictor
-For CAID4 (CPU-only, offline, no protein language model in the container), use
-the dedicated runner `caid/predict.py`. It consumes **precomputed ProstT5
-embeddings** instead of running the PLM itself.
+Run a prediction (mount your data into `/data`):
+```
+docker run --rm -v "$PWD":/data udonpred \
+    /data/input.fasta /app/weights --embeddings /data/embeddings.h5 \
+    --target all --threads 24 --output /data/out
+```
 
-### Install (inference only)
+Generate the embeddings beforehand (outside the container) with
+ProstT5 model `Rostlab/ProstT5_fp16`; see [EMBEDDINGS.md](EMBEDDINGS.md) for the
+full specification:
 ```
-pip install -r requirements-caid.txt
+python embed.py input.fasta --output embeddings.h5
 ```
-This slim dependency set excludes `torch`/`transformers`.
 
-### 1. Generate embeddings (outside the container)
-See [EMBEDDINGS.md](EMBEDDINGS.md) for the full specification. The exact command:
-```
-python embed.py input.fasta --output embeddings.h5 --device cpu
-```
-ProstT5 model: `Rostlab/ProstT5_fp16`. Embeddings are provided as `.npy`
-(single sequence) or `.h5` (keyed by FASTA header), dimension 1024.
-
-### 2. Predict
-```
-python -m caid.predict input.fasta weights/ --embeddings embeddings.h5 \
-    --target all --threads 24 --output out/
-```
 Options:
 - `--target` — one or more of trizod/chezod/softdis/pdbflex/atlas/plddt/disprot,
   or `all` to run every head in `weights/` (default: trizod).
@@ -55,21 +41,68 @@ Options:
   `--smooth` (Gaussian sigma, 0 to disable).
 
 **Output:** one CAID file **per prediction head**, named `udonpred_<target>.caid`, each
-holding the predictions for **all** input proteins concatenated. All files are
-written flat into the output directory, e.g. `out/udonpred_trizod.caid`, `out/udonpred_disprot.caid`.
-The embedding for each protein is aligned once and reused across every head.
+holding the predictions for **all** input proteins concatenated, written flat into the
+output directory (e.g. `out/udonpred_trizod.caid`, `out/udonpred_disprot.caid`).
 
-### Docker
-```
-docker build -t udonpred-caid .
-docker run --rm -v "$PWD":/data udonpred-caid \
-    /data/input.fasta /app/weights --embeddings /data/embeddings.h5 \
-    --target trizod --threads 24 --output /data/out
-```
-The image bundles only the code and the small ONNX heads — never the PLM or its
-weights.
+#### How to Generate Embeddings
+**Important note:** The CAID4 predictor (`caid/predict.py`) does **not** run the protein language
+model. It consumes per-residue **ProstT5** embeddings that are precomputed and
+passed in via `--embeddings`. This document is the exact specification for
+generating them.
 
-## Training a Model
+##### pLM Specifications
+
+| Property | Value |
+| --- | --- |
+| Model | `Rostlab/ProstT5_fp16` (T5 encoder) |
+| Direction | AA → 3Di, i.e. the `<AA2fold>` prefix token |
+| Representation | `last_hidden_state` (encoder output) |
+| Embedding dimension | **1024** |
+| dtype | `float32` (fp16 is accepted; the predictor up-casts) |
+| Ambiguous residues | `B, Z, J, U, O, *` → `X` before tokenisation |
+
+##### Input Format
+The predictor needs **one row per residue**: shape `(L, 1024)` for a sequence
+of length `L`. The predictor is tolerant of the ProstT5 special tokens and will
+trim them automatically, accepting any of:
+
+- `(L, 1024)`   — already trimmed (preferred)
+- `(L+1, 1024)` — leading `<AA2fold>` prefix included
+- `(L+2, 1024)` — leading prefix **and** trailing `</s>` (EOS) included
+
+Any other length is treated as a mismatch and raises an error.
+
+Expected format: **`.h5`** — one dataset per sequence, keyed by the **FASTA header** (the text
+  after `>`, whitespace-trimmed). Use this for multi-sequence FASTA files.
+
+##### Usage
+The repository ships `embed.py`, which produces embeddings in exactly the
+expected layout (trimmed to `(L, 1024)`, float32, ambiguous residues mapped to
+`X`):
+
+```bash
+# Multi-sequence -> HDF5 keyed by FASTA header
+python embed.py input.fasta --output embeddings.h5
+```
+
+`embed.py` requires `torch` and `transformers` (see `pyproject.toml`); it is the
+only component that downloads/loads ProstT5 and is intentionally **outside** the
+CAID inference container.
+
+### Manually
+1. `git clone https://github.com/DavidWagemann/UdonPred.git`
+2. `cd UdonPred`
+3. `uv sync`
+4. `uv run predict.py {path to fasta} {path to weights}`
+
+You can use the following options:
+- `--target`: chooses the model trained on the specified dataset (trizod, chezod, softdis, pdbflex, atlas, plddt, disprot). The default is trizod.
+- `--output`: sets the output directory path. Each sequence will be saved as a .caid file. The output will be written to the terminal if this is not set.
+- `--batch-size`: sets the total sequence length per batch. Try reducing this if you get an out of memory error.
+- `--device`: sets the device used for inference (cpu or cuda). Uses cuda by default if available.
+- `--smooth`: Applies gaussian smoothing with the give sigma to the results in order to remove prediction noise. 
+
+## Retraining
 UdonPred can be retrained by placing the required data as jsonl files in a data/ subfolder and pointing to it in `config/data.yaml`. The training configuration and architecture can be changed in `config/config.yaml` and `config/architecture.yaml` respectively. To start the training process, run `uv run run.py train`. 
 
 After training is complete, a checkpoint can be exported for use with the prediction script using `uv run export.py {path to checkpoint}`. For export options, see `uv run export.py --help`.
