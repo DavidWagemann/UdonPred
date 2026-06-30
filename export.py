@@ -128,7 +128,7 @@ def main():
         description="Export prediction heads to ONNX from one or more checkpoints."
     )
     parser.add_argument(
-        "checkpoint_root",
+        "checkpoint-root",
         type=str,
         help="Root folder containing checkpoint subdirectories.",
     )
