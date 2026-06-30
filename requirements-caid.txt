@@ -1,0 +1,13 @@
+# Minimal runtime dependencies for the CAID4 UdonPred predictor (caid/predict.py).
+#
+# This is the *inference-only* dependency set: it consumes precomputed ProstT5
+# embeddings and runs the small ONNX prediction heads on CPU. It deliberately
+# excludes torch / transformers / the protein language model (see embed.py and
+# EMBEDDINGS.md — embeddings are precomputed by the organisers).
+#
+# Lower bounds reflect the versions this predictor was validated against.
+numpy>=2.0,<3
+scipy>=1.13
+onnxruntime>=1.20
+h5py>=3.10
+tqdm>=4.66

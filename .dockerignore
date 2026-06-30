@@ -1,0 +1,15 @@
+.git
+.venv
+venv
+__pycache__
+*.py[cod]
+tests
+eval
+images
+model
+config
+run.py
+export.py
+predict.py
+embed.py
+*.md
