@@ -54,9 +54,9 @@ Options:
   `--device` (cpu/cuda, default cpu), `--threads` (CPU thread cap),
   `--smooth` (Gaussian sigma, 0 to disable).
 
-**Output:** one CAID file **per prediction head**, named `<target>.caid`, each
+**Output:** one CAID file **per prediction head**, named `udonpred_<target>.caid`, each
 holding the predictions for **all** input proteins concatenated. All files are
-written flat into the output directory, e.g. `out/trizod.caid`, `out/disprot.caid`.
+written flat into the output directory, e.g. `out/udonpred_trizod.caid`, `out/udonpred_disprot.caid`.
 The embedding for each protein is aligned once and reused across every head.
 
 ### Docker

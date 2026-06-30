@@ -50,7 +50,7 @@ def test_all_targets_writes_one_file_per_head_same_dir(tmp_path):
     assert res.returncode == 0, res.stderr
     # one file per head, all in the same flat output directory
     for target in EXPECTED:
-        f = outdir / f"{target}.caid"
+        f = outdir / f"udonpred_{target}.caid"
         assert f.exists(), f"missing {f}"
         assert f.read_text().startswith(">seq1\n")
     # no per-target subdirectories
@@ -80,9 +80,9 @@ def test_explicit_multiple_targets(tmp_path):
         cwd=ROOT,
     )
     assert res.returncode == 0, res.stderr
-    assert (outdir / "trizod.caid").exists()
-    assert (outdir / "disprot.caid").exists()
-    assert not (outdir / "atlas.caid").exists()
+    assert (outdir / "udonpred_trizod.caid").exists()
+    assert (outdir / "udonpred_disprot.caid").exists()
+    assert not (outdir / "udonpred_atlas.caid").exists()
 
 
 def test_one_file_per_head_holds_all_proteins(tmp_path):
@@ -114,7 +114,7 @@ def test_one_file_per_head_holds_all_proteins(tmp_path):
     )
     assert res.returncode == 0, res.stderr
     for target in ("trizod", "disprot"):
-        text = (outdir / f"{target}.caid").read_text()
+        text = (outdir / f"udonpred_{target}.caid").read_text()
         # both proteins concatenated into the single per-head file
         assert ">seq1\n" in text and ">seq2\n" in text
         assert text.index(">seq1") < text.index(">seq2")

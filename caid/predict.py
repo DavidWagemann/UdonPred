@@ -5,7 +5,7 @@ ProstT5 protein language model. Per-residue embeddings are supplied externally
 (``.npy`` or ``.h5``, see ``embed.py`` / EMBEDDINGS.md for how to generate
 them) and only the small ONNX prediction heads are run, on CPU by default.
 
-Each prediction head writes a single ``{target}.caid`` file containing all
+Each prediction head writes a single ``udonpred_{target}.caid`` file containing all
 input proteins concatenated; with ``--target all`` every head's file lands flat
 in the same output directory.
 
@@ -78,13 +78,13 @@ def run(
     }
 
     # One CAID file per prediction head, holding all proteins concatenated, all
-    # written flat into the output directory ({target}.caid). Open every head's
+    # written flat into the output directory (udonpred_{target}.caid). Open every head's
     # file once so each sequence's embedding is aligned a single time and reused.
     out_files = None
     if output_path:
         out_dir = Path(output_path)
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_files = {name: (out_dir / f"{name}.caid").open("w") for name in targets}
+        out_files = {name: (out_dir / f"udonpred_{name}.caid").open("w") for name in targets}
 
     try:
         for index, (header, seq) in enumerate(entries):
@@ -136,7 +136,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="One or more prediction types, each matching a {target}.onnx file "
         "in model_dir (trizod, chezod, softdis, pdbflex, atlas, plddt, "
         "disprot). Use 'all' to run every head in model_dir. Each head writes "
-        "one {target}.caid file (all proteins concatenated) into the output "
+        "one udonpred_{target}.caid file (all proteins concatenated) into the output "
         "directory. Default: trizod.",
     )
     parser.add_argument(
@@ -144,7 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
         "-o",
         type=str,
         default=None,
-        help="Output directory. Each head writes one <target>.caid file with "
+        help="Output directory. Each head writes one udonpred_<target>.caid file with "
         "all proteins concatenated. Writes to stdout if unset.",
     )
     parser.add_argument(

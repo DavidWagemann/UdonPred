@@ -84,7 +84,7 @@ def run_exported(
                 formatted_lines = format_predictions(header, seq, scores_seq)
                 if out_dir:
                     safe_header = header.replace("/", "_").replace("|", "_")
-                    file_path = out_dir / f"{safe_header}.caid"
+                    file_path = out_dir / f"udonpred_{safe_header}.caid"
                     with file_path.open("w") as f:
                         f.writelines(formatted_lines)
                 else:
