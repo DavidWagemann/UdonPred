@@ -42,10 +42,10 @@ expected layout (trimmed to `(L, 1024)`, float32, ambiguous residues mapped to
 
 ```bash
 # Multi-sequence -> HDF5 keyed by FASTA header
-python embed.py input.fasta --output embeddings.h5 --device cpu
+python embed.py input.fasta --output embeddings.h5
 
 # Single sequence -> .npy
-python embed.py single.fasta --output embeddings.npy --device cpu
+python embed.py single.fasta --output embeddings.npy
 ```
 
 `embed.py` requires `torch` and `transformers` (see `pyproject.toml`); it is the
