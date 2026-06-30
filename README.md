@@ -12,18 +12,14 @@ For the old version submitted to CAID3 go to [https://github.com/jschlensok/udon
 ### Docker
 The quickest way to run UdonPred is via Docker. The image is inference-only: it
 bundles the predictor code and the small ONNX prediction heads, and consumes
-**precomputed ProstT5 embeddings** (`.npy`/`.h5`) on CPU.
-
-Build the image:
-```
-docker build -t udonpred .
-```
+**precomputed ProstT5 embeddings** (`.h5`) on CPU.
 
 Run a prediction (mount your data into `/data`):
 ```
 docker run --rm -v "$PWD":/data udonpred \
     /data/input.fasta /app/weights --embeddings /data/embeddings.h5 \
-    --target all --threads 24 --output /data/out
+    --target all --threads 24 --output /data/out \
+	jschlensok/udonpred:caid4
 ```
 
 Generate the embeddings beforehand (outside the container) with
