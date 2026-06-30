@@ -134,29 +134,29 @@ def build_prediction_heads(trial, config):
     
     Args:
         trial: Optuna trial object or dict of hyperparameters for layer configuration.
-        config: Configuration dictionary with optimise and config keys.
+        config: Configuration dictionary with optimize and config keys.
     
     Returns:
         dict: Dictionary of prediction heads indexed by head name, each as nn.Sequential.
     """
     single_head = []
 
-    n_layers = suggest(trial, "n_layers", config["optimise"]["num_layers"])
+    n_layers = suggest(trial, "n_layers", config["optimize"]["num_layers"])
     input_dim = config["config"]["input_dim"]
 
     for layer in range(n_layers):
-        layer_type = suggest(trial, f"layer_{layer}", config["optimise"]["layer_type"])
-        output_dim = suggest(trial, f"dim_{layer}", config["optimise"]["layer_size"])
+        layer_type = suggest(trial, f"layer_{layer}", config["optimize"]["layer_type"])
+        output_dim = suggest(trial, f"dim_{layer}", config["optimize"]["layer_size"])
 
         activation_type = suggest(
-            trial, f"activation_{layer}", config["optimise"]["activation_type"]
+            trial, f"activation_{layer}", config["optimize"]["activation_type"]
         )
         dropout_rate = suggest(
-            trial, f"dropout_{layer}", config["optimise"]["dropout_rate"]
+            trial, f"dropout_{layer}", config["optimize"]["dropout_rate"]
         )
 
         # Get layer-specific parameters, defaults to empty dict if not specified
-        layer_params = config["optimise"]["layer_params"].get(layer_type, {})
+        layer_params = config["optimize"]["layer_params"].get(layer_type, {})
 
         block = get_block(
             trial,
@@ -218,15 +218,15 @@ def model_init(trial):
             output_keys |= keys
 
     if trial:
-        finetune = suggest(trial, "finetune", config["optimise"]["lora"]["finetune"])
+        finetune = suggest(trial, "finetune", config["optimize"]["lora"]["finetune"])
         lora_config = {}
         if finetune:
-            for param in config["optimise"]["lora"]:
+            for param in config["optimize"]["lora"]:
                 if param != "finetune":
                     lora_config[param] = suggest(
                         trial,
                         f"lora_{param}",
-                        config["optimise"]["lora"][param],
+                        config["optimize"]["lora"][param],
                     )
 
         prediction_heads = build_prediction_heads(trial, config)

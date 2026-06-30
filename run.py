@@ -14,7 +14,7 @@ from model.trainer import CustomTrainer
 
 CONFIG_DIR = "config"
 OUTPUT_DIR = "checkpoints"
-OPTIMISED_PARAMETERS_DIR = "optimised_parameters"
+OPTIMIZED_PARAMETERS_DIR = "optimized_parameters"
 
 
 deepspeed_config = {
@@ -104,7 +104,7 @@ def hp_space(trial):
     """
     config = sys.modules["config"]
 
-    total_batch_size = suggest(trial, "batch_size", config["optimise"]["batch_size"])
+    total_batch_size = suggest(trial, "batch_size", config["optimize"]["batch_size"])
     batch_size, gradient_accumulation_steps = calculate_batch_sizes(
         total_batch_size, config["config"]["max_single_batch_size"]
     )
@@ -113,12 +113,12 @@ def hp_space(trial):
         "per_device_train_batch_size": batch_size,
         "gradient_accumulation_steps": gradient_accumulation_steps,
         "learning_rate": suggest(
-            trial, "learning_rate", config["optimise"]["learning_rate"]
+            trial, "learning_rate", config["optimize"]["learning_rate"]
         ),
         "lr_scheduler_type": suggest(
-            trial, "lr_scheduler", config["optimise"]["lr_scheduler"]
+            trial, "lr_scheduler", config["optimize"]["lr_scheduler"]
         ),
-        # "fp16": suggest(trial, "fp16", config["optimise"]["fp16"]),
+        # "fp16": suggest(trial, "fp16", config["optimize"]["fp16"]),
     }
 
 
@@ -182,7 +182,7 @@ def train_model(config, datasets, collator):
     trainer.train(resume_from_checkpoint=config["config"]["checkpoint"])
 
 
-def run_optimisation(config, datasets, collator):
+def run_optimization(config, datasets, collator):
     """Run hyperparameter optimization using Optuna.
     
     Performs hyperparameter optimization with optional Optuna samplers and pruners.
@@ -239,9 +239,9 @@ def run_optimisation(config, datasets, collator):
         **config["config"]["optim"],
     )
 
-    os.makedirs(f"{OPTIMISED_PARAMETERS_DIR}/{config['config']['run_name']}/", exist_ok=True)
+    os.makedirs(f"{OPTIMIZED_PARAMETERS_DIR}/{config['config']['run_name']}/", exist_ok=True)
     with open(
-        f"{OPTIMISED_PARAMETERS_DIR}/{config['config']['run_name']}/{best_run.run_id}.yaml",
+        f"{OPTIMIZED_PARAMETERS_DIR}/{config['config']['run_name']}/{best_run.run_id}.yaml",
         "w+",
     ) as f:
         yaml.dump(best_run.hyperparameters, f)
@@ -251,7 +251,7 @@ def main(mode: str):
     """Main execution function.
     
     Args:
-        mode: Either 'train' or 'optimise'
+        mode: Either 'train' or 'optimize'
     """
     config = {}
     for file in os.listdir(CONFIG_DIR):
@@ -272,20 +272,20 @@ def main(mode: str):
 
     if mode == "train":
         train_model(config, data, collator)
-    elif mode == "optimise":
-        run_optimisation(config, data, collator)
+    elif mode == "optimize":
+        run_optimization(config, data, collator)
     else:
-        raise ValueError(f"Invalid mode: {mode}. Must be 'train' or 'optimise'.")
+        raise ValueError(f"Invalid mode: {mode}. Must be 'train' or 'optimize'.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Train or optimise a model for disorder prediction"
+        description="Train or optimize a model for disorder prediction"
     )
     parser.add_argument(
         "mode",
-        choices=["train", "optimise"],
-        help="Mode to run: 'train' for training or 'optimise' for hyperparameter optimization"
+        choices=["train", "optimize"],
+        help="Mode to run: 'train' for training or 'optimize' for hyperparameter optimization"
     )
     
     args = parser.parse_args()

@@ -16,7 +16,7 @@ lr_scheduler:
   type: categorical
   values: [cosine, reduce_lr_on_plateau, constant] #linear, cosine, cosine_with_restarts, polynomial, constant, constant_with_warmup, inverse_sqrt, reduce_lr_on_plateau, cosine_with_min_lr, warmup_stable_decay,
 
-#TODO: Choose optimiser https://colab.research.google.com/github/PacktPublishing/Hyperparameter-Tuning-with-Python/blob/main/09_Hyperparameter-Tuning-via-Optuna.ipynb#scrollTo=bd94274e-87a8-43bd-8b2a-0df892b28b6d
+#TODO: Choose optimizer https://colab.research.google.com/github/PacktPublishing/Hyperparameter-Tuning-with-Python/blob/main/09_Hyperparameter-Tuning-via-Optuna.ipynb#scrollTo=bd94274e-87a8-43bd-8b2a-0df892b28b6d
 
 num_layers: 
   type: int
