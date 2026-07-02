@@ -6,7 +6,7 @@ from typing import List, Sequence, Tuple
 # Ambiguous / non-standard residues that the ProstT5 vocabulary does not cover.
 # All are mapped to ``X`` (any amino acid):
 #   B -> Asn/Asp, Z -> Gln/Glu, J -> Leu/Ile, U -> Selenocysteine,
-#   O -> Pyrrolysine, ``*`` -> stop/translation artefact.
+#   O -> Pyrrolysine, ``*`` -> stop/translation artifact.
 # ``X`` itself is already valid and is left untouched.
 _NONSTANDARD = re.compile(r"[BZJUO*]")
 

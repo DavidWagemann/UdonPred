@@ -24,7 +24,7 @@ Batch = Dict[str, List[Any]]
 
 
 class SQLiteCache:
-    """SQLite-backed cache for tokenisation and embeddings.
+    """SQLite-backed cache for tokenization and embeddings.
 
     Stores records keyed by `text`, with pickled blobs for `input_ids`,
     `attention_mask`, and `embedding`. Provides batched read/write helpers
@@ -128,7 +128,7 @@ class SQLiteCache:
         """Context manager exit."""
         self.close()
 
-def make_tokenise_and_embed_fn(backbone_model, cache: SQLiteCache):
+def make_tokenize_and_embed_fn(backbone_model, cache: SQLiteCache):
     """Build a batched tokenize and embed function with SQLite caching.
     
     Creates a function that tokenizes protein sequences and generates embeddings,
@@ -185,7 +185,7 @@ def make_tokenise_and_embed_fn(backbone_model, cache: SQLiteCache):
         if not missing_texts:
             return
 
-        batch_input_ids, batch_attention_mask = backbone_model.tokenise(missing_texts)
+        batch_input_ids, batch_attention_mask = backbone_model.tokenize(missing_texts)
         batch_embeddings = backbone_model.embed(batch_input_ids, batch_attention_mask)
 
         seq_lens = [len(seq) for seq in missing_texts] 
@@ -223,7 +223,7 @@ def make_tokenise_and_embed_fn(backbone_model, cache: SQLiteCache):
         for text, ids, mask, emb in cache_items:
             local_cache[text] = (ids, mask, emb)
 
-    def _tokenise_and_embed_batch(batch: Batch) -> Dict[str, List[Any]]:
+    def _tokenize_and_embed_batch(batch: Batch) -> Dict[str, List[Any]]:
         """Tokenize and embed text columns in the batch using a SQLite cache.
         
         Processes all text columns in a batch, using cached embeddings where
@@ -265,7 +265,7 @@ def make_tokenise_and_embed_fn(backbone_model, cache: SQLiteCache):
 
         return output_batch
 
-    return _tokenise_and_embed_batch
+    return _tokenize_and_embed_batch
 
 
 def build_datasets(
@@ -305,13 +305,13 @@ def build_datasets(
 
     cache = SQLiteCache(cache_path)
     try:
-        process_fn = make_tokenise_and_embed_fn(backbone_model, cache)
+        process_fn = make_tokenize_and_embed_fn(backbone_model, cache)
 
         ds = ds.map(
             process_fn,
             batched=True,
             batch_size=map_batch_rows,
-            desc="tokenising and embedding",
+            desc="tokenizing and embedding",
         )
 
         ds = ds.with_format("torch")
@@ -460,7 +460,7 @@ def get_datasets(
     backbone_model = Embedder(
         backbone_name=backbone_config["name"],
         prefix_token=backbone_config["prefix_token"],
-        tokeniser_type=backbone_config["tokeniser_type"],
+        tokenizer_type=backbone_config["tokenizer_type"],
         model_type=backbone_config["model_type"],
     )
 
@@ -500,26 +500,26 @@ def get_datasets(
 class DataCollator:
     """Batch collator handling padding.
     """
-    def _load_tokeniser(self, backbone_name: str, tokeniser_type: str):
+    def _load_tokenizer(self, backbone_name: str, tokenizer_type: str):
         """Load tokenizer for data collation.
         
         Args:
             backbone_name: Name or path of the backbone model.
-            tokeniser_type: Type of tokenizer to load.
+            tokenizer_type: Type of tokenizer to load.
         
         Returns:
             Tokenizer instance.
         """
         transformers = import_module("transformers")
-        tokeniser_class = getattr(transformers, tokeniser_type)
-        return tokeniser_class.from_pretrained(
+        tokenizer_class = getattr(transformers, tokenizer_type)
+        return tokenizer_class.from_pretrained(
             backbone_name, use_fast=False, do_lower_case=False
         )
 
     def __init__(
         self,
         backbone_name: str,
-        tokeniser_type: str,
+        tokenizer_type: str,
         padding: float = 999,
         embedding_padding: float = 0.0,
         attention_mask_padding: int = 0,
@@ -530,15 +530,15 @@ class DataCollator:
         
         Args:
             backbone_name: Name or path of the backbone model.
-            tokeniser_type: Type of tokenizer to use.
+            tokenizer_type: Type of tokenizer to use.
             padding: Padding value for targets. Defaults to 999.
             embedding_padding: Padding value for embeddings. Defaults to 0.0.
             attention_mask_padding: Padding value for attention masks. Defaults to 0.
             batch_first: Whether to return batch dimension first. Defaults to True.
             next_pow2: Whether to pad to next power of 2. Defaults to False.
         """
-        self.pad_token_id = self._load_tokeniser(
-            backbone_name, tokeniser_type
+        self.pad_token_id = self._load_tokenizer(
+            backbone_name, tokenizer_type
         ).pad_token_id
 
         self.padding_value = padding

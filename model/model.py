@@ -117,7 +117,7 @@ def load_model(config, finetune, lora_config, prediction_heads, output_keys):
     embedder = Embedder(
         backbone_name=bb_params["name"],
         prefix_token=bb_params["prefix_token"],
-        tokeniser_type=bb_params["tokeniser_type"],
+        tokenizer_type=bb_params["tokenizer_type"],
         model_type=bb_params["model_type"],
     )
 

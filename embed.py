@@ -1,6 +1,6 @@
 """Generate ProstT5 per-residue embeddings for UdonPred / CAID4.
 
-This is the *exact command* the CAID4 organisers (or anyone running offline)
+This is the *exact command* the CAID4 organizers (or anyone running offline)
 should use to precompute the embeddings consumed by ``caid/predict.py``. It is
 the only component that loads the ProstT5 protein language model, so it lives
 outside the CAID container.

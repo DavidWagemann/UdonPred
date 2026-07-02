@@ -1,4 +1,4 @@
-"""ProstT5 backbone loading, tokenisation, and on-the-fly embedding.
+"""ProstT5 backbone loading, tokenization, and on-the-fly embedding.
 
 This is the *online* embedding path used by the standard ``predict.py`` runner
 and the ``embed.py`` helper. It is deliberately isolated from the rest of
@@ -40,8 +40,8 @@ def resolve_device(device: str) -> str:
 
 def load_tokenizer():
     """Load the ProstT5 tokenizer."""
-    tokeniser_base = getattr(import_module("transformers"), BACKBONE_TOKENIZER_TYPE)
-    return tokeniser_base.from_pretrained(
+    tokenizer_base = getattr(import_module("transformers"), BACKBONE_TOKENIZER_TYPE)
+    return tokenizer_base.from_pretrained(
         BACKBONE_NAME,
         use_fast=False,
         do_lower_case=False,
@@ -59,10 +59,10 @@ def load_backbone(torch_device: str, dtype):
 
 
 def tokenize_batch(tokenizer, seqs: List[str], torch_device: str):
-    """Tokenise a batch of sequences with the ``<AA2fold>`` prefix.
+    """Tokenize a batch of sequences with the ``<AA2fold>`` prefix.
 
     Ambiguous/non-standard residues (B, Z, J, U, O, ``*``) are replaced with
-    ``X`` via :func:`udonpred.fasta.sanitize_sequence` before tokenisation.
+    ``X`` via :func:`udonpred.fasta.sanitize_sequence` before tokenization.
     """
     texts = [
         f"{PREFIX_TOKEN} " + " ".join(list(sanitize_sequence(seq))) for seq in seqs

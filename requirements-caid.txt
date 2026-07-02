@@ -3,7 +3,7 @@
 # This is the *inference-only* dependency set: it consumes precomputed ProstT5
 # embeddings and runs the small ONNX prediction heads on CPU. It deliberately
 # excludes torch / transformers / the protein language model (see embed.py and
-# EMBEDDINGS.md — embeddings are precomputed by the organisers).
+# EMBEDDINGS.md — embeddings are precomputed by the organizers).
 #
 # Lower bounds reflect the versions this predictor was validated against.
 numpy>=2.0,<3

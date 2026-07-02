@@ -44,7 +44,7 @@ hyperparameter_path: config/architecture.yaml
 # Backbone model configuration
 backbone:
   name: "Rostlab/ProstT5_fp16" 
-  tokeniser_type: "T5Tokenizer"
+  tokenizer_type: "T5Tokenizer"
   model_type: "T5EncoderModel"
   prefix_token: "<AA2fold>" 
   preprocessing_batch_size: 1

@@ -2,7 +2,7 @@
 <img align="right" src="images/udonpred_logo_small.png" alt="image" height="20%" width="20%" />
 
 **UdonPred** is a set of models for predicting disorder based on different definitions of disorder, reaching state-of-the-art performance using simple, [ProstT5](https://github.com/mheinzinger/ProstT5)-based embeddings. 
-The ability of models trained on one definition of disorder to generalise to others was accessed in the corresponding [publication](https://doi.org/10.64898/2026.01.26.701679).
+The ability of models trained on one definition of disorder to generalize to others was accessed in the corresponding [publication](https://doi.org/10.64898/2026.01.26.701679).
 
 The training data can be found on [here](https://doi.org/10.6084/m9.figshare.31444642).
 
@@ -55,7 +55,7 @@ generating them.
 | Representation | `last_hidden_state` (encoder output) |
 | Embedding dimension | **1024** |
 | dtype | `float32` (fp16 is accepted; the predictor up-casts) |
-| Ambiguous residues | `B, Z, J, U, O, *` → `X` before tokenisation |
+| Ambiguous residues | `B, Z, J, U, O, *` → `X` before tokenization |
 
 ##### Input Format
 The predictor needs **one row per residue**: shape `(L, 1024)` for a sequence

@@ -1,6 +1,6 @@
 """Loading and aligning precomputed ProstT5 embeddings for the CAID runner.
 
-Embeddings are supplied by the CAID organisers (we never run the PLM in the
+Embeddings are supplied by the CAID organizers (we never run the PLM in the
 container). Two container formats are supported:
 
 * ``.npy`` — a single ``(L, D)`` array for a single-sequence FASTA.
@@ -24,7 +24,7 @@ def align_embedding(
 ) -> np.ndarray:
     """Trim a per-token embedding down to exactly ``seq_len`` residue rows.
 
-    Accepts the three layouts the organisers might provide and returns a
+    Accepts the three layouts the organizers might provide and returns a
     ``float32`` array of shape ``(seq_len, D)``:
 
     * ``L``      — already trimmed (used as-is).

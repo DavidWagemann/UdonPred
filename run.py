@@ -267,7 +267,7 @@ def main(mode: str):
 
     collator = DataCollator(
         config["config"]["backbone"]["name"],
-        config["config"]["backbone"]["tokeniser_type"],
+        config["config"]["backbone"]["tokenizer_type"],
     )
 
     if mode == "train":

@@ -24,10 +24,10 @@ class Embedder(PreTrainedModel):
     
     Attributes:
         backbone_name: Name or path of the pretrained model.
-        tokeniser_type: Type of tokenizer to use (e.g., 'T5Tokenizer').
+        tokenizer_type: Type of tokenizer to use (e.g., 'T5Tokenizer').
         model_type: Type of model to use (e.g., 'T5EncoderModel').
         prefix_token: Optional prefix to prepend to sequences.
-        tokeniser: Loaded tokenizer instance (lazy-loaded).
+        tokenizer: Loaded tokenizer instance (lazy-loaded).
         model: Loaded embedding model (lazy-loaded).
         prefix_token_len: Number of tokens in the prefix.
     """
@@ -35,7 +35,7 @@ class Embedder(PreTrainedModel):
         self,
         backbone_name: str,
         prefix_token: str = "",
-        tokeniser_type: str = "T5Tokenizer",
+        tokenizer_type: str = "T5Tokenizer",
         model_type: str = "T5EncoderModel",
     ):
         """Initialize the Embedder.
@@ -44,7 +44,7 @@ class Embedder(PreTrainedModel):
             backbone_name: Name or path of the pretrained model to load.
             prefix_token: Optional prefix string to prepend to sequences.
                          Defaults to empty string.
-            tokeniser_type: Name of tokenizer class to use from transformers.
+            tokenizer_type: Name of tokenizer class to use from transformers.
                            Defaults to 'T5Tokenizer'.
             model_type: Name of model class to use from transformers.
                        Defaults to 'T5EncoderModel'.
@@ -55,21 +55,21 @@ class Embedder(PreTrainedModel):
         super().__init__(config)
 
         self.backbone_name = backbone_name
-        self.tokeniser_type = tokeniser_type
+        self.tokenizer_type = tokenizer_type
         self.model_type = model_type
-        self.tokeniser = None
+        self.tokenizer = None
         self.model = None
         self.prefix_token = prefix_token + " " if prefix_token != "" else ""
         self.prefix_token_len = len(self.prefix_token.split(" ")) - 1
 
-    def load_tokeniser(self):
+    def load_tokenizer(self):
         """Load the tokenizer for the embedding model.
         
         Dynamically imports and loads the specified tokenizer type from the
-        transformers library. Sets the tokeniser instance attribute.
+        transformers library. Sets the tokenizer instance attribute.
         """
-        tokeniser_base = getattr(import_module("transformers"), self.tokeniser_type)
-        self.tokeniser = tokeniser_base.from_pretrained(
+        tokenizer_base = getattr(import_module("transformers"), self.tokenizer_type)
+        self.tokenizer = tokenizer_base.from_pretrained(
             self.backbone_name,
             use_fast=False,
             do_lower_case=False,
@@ -93,7 +93,7 @@ class Embedder(PreTrainedModel):
         self.model = self.model.eval()
         self.model = self.model.to(device)
 
-    def tokenise(self, seqs):
+    def tokenize(self, seqs):
         """Tokenize protein sequences.
         
         Converts protein sequences to token IDs and attention masks. Replaces
@@ -112,10 +112,10 @@ class Embedder(PreTrainedModel):
             for seq in seqs
         ]
 
-        if self.tokeniser is None:
-            self.load_tokeniser()
+        if self.tokenizer is None:
+            self.load_tokenizer()
 
-        token_encoding = self.tokeniser.batch_encode_plus(  # type: ignore
+        token_encoding = self.tokenizer.batch_encode_plus(  # type: ignore
             seqs,
             add_special_tokens=True,
             padding="longest",
