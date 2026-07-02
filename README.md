@@ -11,15 +11,23 @@ For the old version submitted to CAID3 go to [https://github.com/jschlensok/udon
 ## Usage
 ### Docker
 The quickest way to run UdonPred is via Docker. The image is inference-only: it
-bundles the predictor code and the small ONNX prediction heads, and consumes
-**precomputed ProstT5 embeddings** (`.h5`) on CPU.
+consumes **precomputed ProstT5 embeddings** (`.h5`) on CPU. The ONNX prediction
+heads are pulled from the Hugging Face Hub
+([`udonpred/prediction-heads`](https://huggingface.co/udonpred/prediction-heads))
+**at build time** and baked into the image, so inference needs no network access.
 
-Run a prediction (mount your data into `/data`):
+Build the image (pins the released heads; pass `--build-arg HEADS_REVISION=main`
+for the latest, or another tag to pin a different release):
+```
+docker build -t udonpred .
+```
+
+Run a prediction (mount your data into `/data`). The heads live at `/app/weights`
+inside the image and are used automatically, so `model_dir` can be omitted:
 ```
 docker run --rm -v "$PWD":/data udonpred \
-    /data/input.fasta /app/weights --embeddings /data/embeddings.h5 \
-    --target all --threads 24 --output /data/out \
-	jschlensok/udonpred:caid4
+    /data/input.fasta --embeddings /data/embeddings.h5 \
+    --target all --threads 24 --output /data/out
 ```
 
 Generate the embeddings beforehand (outside the container) with
@@ -89,10 +97,17 @@ ProstT5 and is intentionally **outside** the CAID inference container.
 ### Manually
 1. `git clone https://github.com/davidwagemann/udonpred.git .`
 2. `uv sync --extra embedding` (the on-the-fly predictor needs `torch` + `transformers`; plain `uv sync` installs only the lean inference core)
-3. `uv run udonpred-predict {path to fasta} {path to weights}`
+3. `uv run udonpred-predict {path to fasta}`
+
+The `model_dir` argument is optional: omit it to pull the released ONNX heads
+from the Hub ([`udonpred/prediction-heads`](https://huggingface.co/udonpred/prediction-heads),
+cached locally), or pass a **local directory** to use your own heads offline, or
+a **Hub repo id** to pull a different set. Fetching from the Hub needs the `hub`
+extra (`uv sync --extra hub`; bundled with `embedding`/`training`/dev).
 
 You can use the following options:
 - `--target`: chooses the model trained on the specified dataset (trizod, chezod, softdis, pdbflex, atlas, plddt, disprot). The default is trizod.
+- `--revision`: Hub revision (tag/branch/commit) to pull the heads from when `model_dir` is a repo id or omitted (default: the pinned release).
 - `--output`: sets the output directory path. Each sequence will be saved as a .caid file. The output will be written to the terminal if this is not set.
 - `--batch-size`: sets the total sequence length per batch. Try reducing this if you get an out of memory error.
 - `--device`: sets the device used for inference (cpu or cuda). Uses cuda by default if available.
@@ -101,7 +116,17 @@ You can use the following options:
 ## Retraining
 Install the training stack with `uv sync --extra training`. UdonPred can be retrained by placing the required data as jsonl files in a data/ subfolder and pointing to it in `src/udonpred/training/config/data.yaml`. The training configuration and architecture can be changed in `src/udonpred/training/config/config.yaml` and `src/udonpred/training/config/architecture.yaml` respectively. To start the training process, run `uv run udonpred-train train`.
 
-After training is complete, a checkpoint can be exported for use with the prediction script using `uv run udonpred-export {path to checkpoint}`. For export options, see `uv run udonpred-export --help`.
+After training is complete, export the checkpoint to ONNX and publish the heads
+to the Hub in one step:
+```
+uv run udonpred-export {checkpoint-root} -o exported/ --push-to-hub --tag v0.2.0
+```
+This uploads every exported `*.onnx` head to `udonpred/prediction-heads` (override
+with `--hf-repo`) using your ambient `huggingface-cli login`, and tags the release.
+Remember to bump `DEFAULT_HEADS_REVISION` in `src/udonpred/heads.py` (and the
+`HEADS_REVISION` build arg in the `Dockerfile`) to the new tag so inference and
+the container pull the new heads by default. Omit `--push-to-hub` to export
+locally only. For all options, see `uv run udonpred-export --help`.
 
 ## How to Cite
 ```
