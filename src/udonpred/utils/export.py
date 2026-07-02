@@ -6,6 +6,8 @@ from typing import Dict, List
 
 import yaml
 
+from udonpred.heads import DEFAULT_HEADS_REPO
+
 
 def load_config(checkpoint_dir: str) -> Dict:
     """Load configuration from checkpoint directory."""
@@ -124,6 +126,39 @@ def export_checkpoint(
     print(f"    Heads exported: {', '.join(exported_heads)}")
 
 
+def publish_heads(out_dir: Path, repo_id: str, tag: str | None = None) -> None:
+    """Upload every exported ``*.onnx`` head in ``out_dir`` to a Hub model repo.
+
+    This is the post-(re)training publishing step: after export writes the ONNX
+    heads locally, ``--push-to-hub`` uploads them (and optionally tags the
+    release) so inference can consume them from the Hub. Uses the ambient
+    Hugging Face login; ``huggingface_hub`` is imported lazily.
+    """
+    from huggingface_hub import HfApi
+
+    onnx = sorted(out_dir.glob("*.onnx"))
+    if not onnx:
+        raise ValueError(f"No *.onnx heads to publish in {out_dir}")
+
+    api = HfApi()
+    print(f"Publishing {len(onnx)} head(s) to {repo_id} ...")
+    api.create_repo(repo_id, repo_type="model", private=False, exist_ok=True)
+    api.upload_folder(
+        folder_path=str(out_dir),
+        repo_id=repo_id,
+        repo_type="model",
+        allow_patterns=["*.onnx"],
+        commit_message=(
+            f"Publish {len(onnx)} ONNX prediction head(s)"
+            + (f" ({tag})" if tag else "")
+        ),
+    )
+    if tag:
+        api.create_tag(repo_id, tag=tag, repo_type="model", exist_ok=True)
+        print(f"    Tagged {tag}")
+    print(f"Published to https://huggingface.co/{repo_id}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Export prediction heads to ONNX from one or more checkpoints."
@@ -150,6 +185,25 @@ def main():
             "Relative paths of specific checkpoints to export "
             "(default: all discovered checkpoints)."
         ),
+    )
+    parser.add_argument(
+        "--push-to-hub",
+        action="store_true",
+        help="After exporting, upload the *.onnx heads to a Hugging Face model "
+        "repo (uses your ambient `huggingface-cli login`).",
+    )
+    parser.add_argument(
+        "--hf-repo",
+        type=str,
+        default=DEFAULT_HEADS_REPO,
+        help=f"Target Hub model repo for --push-to-hub (default: {DEFAULT_HEADS_REPO}).",
+    )
+    parser.add_argument(
+        "--tag",
+        type=str,
+        default=None,
+        help="Optional Hub tag to create for this release (e.g. v0.2.0). "
+        "Bump udonpred.heads.DEFAULT_HEADS_REVISION to match.",
     )
 
     args = parser.parse_args()
@@ -192,6 +246,9 @@ def main():
         export_checkpoint(checkpoint_dir, out_base)
 
     print(f"Done. Models saved to {output_root}")
+
+    if args.push_to_hub:
+        publish_heads(output_root, args.hf_repo, args.tag)
 
 
 if __name__ == "__main__":

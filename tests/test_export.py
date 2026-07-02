@@ -84,3 +84,66 @@ def test_load_hyperparameters_reads_referenced_file(tmp_path):
     hp.write_text("learning_rate: 0.001\n")
     config = {"config": {"hyperparameter_path": str(hp)}}
     assert load_hyperparameters(config) == {"learning_rate": 0.001}
+
+
+# ---- publish_heads (Hub upload; HfApi monkeypatched, no network) --------------
+
+def test_publish_heads_uploads_onnx_and_tags(tmp_path, monkeypatch):
+    pytest.importorskip("huggingface_hub")
+    from udonpred.utils.export import publish_heads
+
+    (tmp_path / "trizod.onnx").write_bytes(b"x")
+    (tmp_path / "chezod.onnx").write_bytes(b"x")
+
+    calls = {}
+
+    class FakeApi:
+        def create_repo(self, repo_id, **kw):
+            calls["create_repo"] = (repo_id, kw)
+
+        def upload_folder(self, **kw):
+            calls["upload_folder"] = kw
+
+        def create_tag(self, repo_id, **kw):
+            calls["create_tag"] = (repo_id, kw)
+
+    monkeypatch.setattr("huggingface_hub.HfApi", FakeApi)
+
+    publish_heads(tmp_path, "udonpred/prediction-heads", tag="v1.2.3")
+
+    assert calls["create_repo"][0] == "udonpred/prediction-heads"
+    assert calls["create_repo"][1]["private"] is False
+    assert calls["upload_folder"]["repo_id"] == "udonpred/prediction-heads"
+    assert calls["upload_folder"]["allow_patterns"] == ["*.onnx"]
+    assert calls["create_tag"][1]["tag"] == "v1.2.3"
+
+
+def test_publish_heads_without_tag_skips_tagging(tmp_path, monkeypatch):
+    pytest.importorskip("huggingface_hub")
+    from udonpred.utils.export import publish_heads
+
+    (tmp_path / "trizod.onnx").write_bytes(b"x")
+    calls = {}
+
+    class FakeApi:
+        def create_repo(self, repo_id, **kw):
+            calls["create_repo"] = repo_id
+
+        def upload_folder(self, **kw):
+            calls["upload_folder"] = kw
+
+        def create_tag(self, *a, **kw):  # pragma: no cover - must not run
+            calls["create_tag"] = True
+
+    monkeypatch.setattr("huggingface_hub.HfApi", FakeApi)
+
+    publish_heads(tmp_path, "udonpred/prediction-heads")
+    assert "create_tag" not in calls
+
+
+def test_publish_heads_empty_dir_raises(tmp_path):
+    pytest.importorskip("huggingface_hub")
+    from udonpred.utils.export import publish_heads
+
+    with pytest.raises(ValueError, match="No .*onnx"):
+        publish_heads(tmp_path, "udonpred/prediction-heads")
