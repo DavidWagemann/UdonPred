@@ -2,7 +2,8 @@
 
 This is the original, self-contained predictor — it loads the ProstT5 backbone
 and computes embeddings itself. For the CAID4-compliant runner that consumes
-precomputed embeddings (no PLM in the container), see ``caid/predict.py``.
+precomputed embeddings (no PLM in the container), see
+:mod:`udonpred.caid.predict`.
 
 Both runners share the FASTA, ONNX-head, and embedding logic in the
 ``udonpred`` package; this script only adds the on-the-fly embedding loop.
@@ -16,7 +17,7 @@ from typing import List, Tuple
 import torch
 from tqdm import tqdm
 
-from udonpred.backbone import (
+from udonpred.embedding.backbone import (
     BACKBONE_NAME,
     compute_embeddings,
     load_backbone,

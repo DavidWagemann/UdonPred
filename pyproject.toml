@@ -1,29 +1,70 @@
 [project]
 name = "udonpred-comp"
 version = "0.1.0"
-description = "Add your description here"
+description = "Protein disorder prediction from ProstT5 embeddings (UdonPred, CAID4)"
 readme = "README.md"
 requires-python = ">=3.13"
+
+# Lean, inference-only core: this is all the CAID4 predictor needs. It is
+# deliberately torch-free and mirrors requirements-caid.txt. Heavy stacks live
+# in the optional extras below so `pip install udonpred-comp` stays small.
 dependencies = [
-    "biopython>=1.86",
-    "datasets>=4.5.0",
-    "ipykernel>=7.1.0",
-    "ipywidgets>=8.1.8",
-    "onnx>=1.20.1",
+    "numpy>=2.0,<3",
+    "scipy>=1.13",
     "onnxruntime>=1.23.2",
-    "onnxscript>=0.5.7",
-    "optuna>=4.7.0",
-    "pandas>=2.3.3",
+    "h5py>=3.10",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+# On-the-fly embedding / prediction with the ProstT5 backbone.
+embedding = [
+    "torch>=2.9.1",
+    "transformers==4.54.0",
+    "sentencepiece>=0.2.1",
     "peft>=0.18.1",
+]
+# Model training, hyperparameter optimization, and ONNX export (udonpred-export).
+# Includes the embedding stack (training runs the backbone).
+training = [
+    "udonpred-comp[embedding]",
+    "datasets>=4.5.0",
+    "wandb>=0.24.0",
+    "optuna>=4.7.0",
+    "torchmetrics>=1.8.2",
+    "pandas>=2.3.3",
     "polars>=1.38.1",
     "psutil>=7.2.1",
-    "py3dmol>=2.5.3",
-    "pyyaml>=6.0.3",
     "scikit-learn>=1.8.0",
+    "pyyaml>=6.0.3",
+    "onnx>=1.20.1",
+    "onnxscript>=0.5.7",
     "seaborn>=0.13.2",
-    "sentencepiece>=0.2.1",
-    "torch>=2.9.1",
-    "torchmetrics>=1.8.2",
-    "transformers==4.54.0",
-    "wandb>=0.24.0",
+    "py3dmol>=2.5.3",
+    "biopython>=1.86",
+    "ipykernel>=7.1.0",
+    "ipywidgets>=8.1.8",
 ]
+test = ["pytest>=8"]
+
+[project.scripts]
+# Inference (lean core).
+udonpred-caid = "udonpred.caid.predict:main"
+# On-the-fly predictor / embedding generation (needs [embedding]).
+udonpred-predict = "udonpred.embedding.predict:main"
+udonpred-embed = "udonpred.utils.embed:main"
+# Training and checkpoint -> ONNX export (needs [training]).
+udonpred-train = "udonpred.training.run:main"
+udonpred-export = "udonpred.utils.export:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/udonpred"]
+
+[tool.pytest.ini_options]
+# src layout: make `udonpred` importable in tests without an editable install.
+pythonpath = ["src"]
+testpaths = ["tests"]

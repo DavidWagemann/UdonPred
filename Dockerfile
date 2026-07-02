@@ -18,10 +18,12 @@ RUN pip install --no-cache-dir -r requirements-caid.txt
 
 # Ship the predictor code and the (tiny) ONNX prediction heads.
 # The PLM and its embeddings are NOT included — they are provided at runtime.
-COPY udonpred/ ./udonpred/
-COPY caid/ ./caid/
+# .dockerignore keeps the heavy udonpred/{embedding,training,utils} subpackages
+# out of the build context, so only the lean torch-free core is copied. The
+# package lives under src/ but is flattened to /app/udonpred in the image.
+COPY src/udonpred/ ./udonpred/
 COPY weights/ ./weights/
 
 # Default model directory; override paths via CLI arguments.
-ENTRYPOINT ["python", "-m", "caid.predict"]
+ENTRYPOINT ["python", "-m", "udonpred.caid.predict"]
 CMD ["--help"]

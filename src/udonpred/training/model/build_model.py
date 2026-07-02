@@ -4,7 +4,7 @@ from importlib import import_module
 
 from torch import nn
 
-from model.model import load_model
+from .model import load_model
 
 
 def import_from_string(import_path):

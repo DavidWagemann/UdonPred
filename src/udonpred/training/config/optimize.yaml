@@ -25,7 +25,7 @@ num_layers:
 # Layer types can be any PyTorch module class path
 layer_type: 
   type: categorical
-  values: [torch.nn.Linear, model.layers.CNNLayer]
+  values: [torch.nn.Linear, udonpred.training.model.layers.CNNLayer]
 
 layer_size: 
   type: int
@@ -36,7 +36,7 @@ layer_size:
 # Use dicts with "type" and "values" keys for hyperparameters to be suggested
 layer_params:
   torch.nn.Linear: {}
-  model.layers.CNNLayer:
+  udonpred.training.model.layers.CNNLayer:
     kernel_size: 
       type: categorical
       values: [3, 5, 7, 9, 15, 21]

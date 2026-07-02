@@ -4,7 +4,6 @@ from importlib import import_module
 from pathlib import Path
 from typing import Dict, List
 
-import torch
 import yaml
 
 
@@ -69,12 +68,14 @@ def export_checkpoint(
         out_base: Base output path (without extension). A single head is saved
                   as ``out_base.onnx``; multiple heads as ``out_base_{name}.onnx``.
     """
+    import torch
+
     config = load_config(str(checkpoint_dir))
 
     build_prediction_heads = getattr(
-        import_module("model.build_model"), "build_prediction_heads"
+        import_module("udonpred.training.model.build_model"), "build_prediction_heads"
     )
-    UdonPred = getattr(import_module("model.model"), "UdonPred")
+    UdonPred = getattr(import_module("udonpred.training.model.model"), "UdonPred")
 
     hyperparameters = load_hyperparameters(config)
     prediction_heads = build_prediction_heads(hyperparameters, config)

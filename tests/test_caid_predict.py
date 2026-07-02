@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -5,14 +6,17 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
+SRC = ROOT / "src"
 
 
 def _run(args, cwd):
+    env = {**os.environ, "PYTHONPATH": str(SRC)}
     return subprocess.run(
-        [sys.executable, "-m", "caid.predict", *args],
+        [sys.executable, "-m", "udonpred.caid.predict", *args],
         cwd=cwd,
         capture_output=True,
         text=True,
+        env=env,
     )
 
 
@@ -68,6 +72,6 @@ def test_caid_predict_writes_one_file_per_head(tmp_path):
     )
     assert res.returncode == 0, res.stderr
     # file is named after the prediction head, not the sequence
-    out_file = outdir / "trizod.caid"
+    out_file = outdir / "udonpred_trizod.caid"
     assert out_file.exists()
     assert out_file.read_text().startswith(">seq1\n")

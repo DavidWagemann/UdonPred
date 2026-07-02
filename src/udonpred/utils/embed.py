@@ -1,9 +1,9 @@
 """Generate ProstT5 per-residue embeddings for UdonPred / CAID4.
 
 This is the *exact command* the CAID4 organizers (or anyone running offline)
-should use to precompute the embeddings consumed by ``caid/predict.py``. It is
-the only component that loads the ProstT5 protein language model, so it lives
-outside the CAID container.
+should use to precompute the embeddings consumed by
+:mod:`udonpred.caid.predict`. It is the only component that loads the ProstT5
+protein language model, so it lives outside the CAID container.
 
 Output formats:
   * ``.h5``  — one dataset per sequence, keyed by the FASTA header
@@ -17,17 +17,16 @@ embedding.
 
 Example::
 
-    python embed.py input.fasta --output embeddings.h5 --device cpu
+    udonpred-embed input.fasta --output embeddings.h5 --device cpu
 """
 
 import argparse
 from pathlib import Path
 
 import numpy as np
-import torch
 from tqdm import tqdm
 
-from udonpred.backbone import (
+from udonpred.embedding.backbone import (
     BACKBONE_NAME,
     compute_embeddings,
     load_backbone,
@@ -59,6 +58,8 @@ def generate(
             f"{len(entries)} sequences."
         )
     out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    import torch
 
     torch_device = resolve_device(device)
     torch_dtype = torch.float16 if torch_device == "cuda" else torch.float32

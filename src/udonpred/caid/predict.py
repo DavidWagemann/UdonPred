@@ -2,8 +2,9 @@
 
 This is the CAID-compliant entry point: it does **not** load or run the
 ProstT5 protein language model. Per-residue embeddings are supplied externally
-(``.npy`` or ``.h5``, see ``embed.py`` / EMBEDDINGS.md for how to generate
-them) and only the small ONNX prediction heads are run, on CPU by default.
+(``.npy`` or ``.h5``, see ``udonpred-embed`` / EMBEDDINGS.md for how to
+generate them) and only the small ONNX prediction heads are run, on CPU by
+default.
 
 Each prediction head writes a single ``udonpred_{target}.caid`` file containing all
 input proteins concatenated; with ``--target all`` every head's file lands flat
@@ -11,7 +12,7 @@ in the same output directory.
 
 Example::
 
-    python -m caid.predict input.fasta weights/ \\
+    udonpred-caid input.fasta weights/ \\
         --embeddings embeddings.h5 --target all --threads 24 --output out/
 """
 
@@ -22,7 +23,7 @@ from pathlib import Path
 from udonpred.fasta import format_predictions, read_fasta
 from udonpred.inference import load_head, score_embeddings, smooth_scores
 
-from caid.embeddings import align_embedding, load_precomputed_embeddings
+from udonpred.caid.embeddings import align_embedding, load_precomputed_embeddings
 
 
 def discover_targets(model_dir) -> list[str]:

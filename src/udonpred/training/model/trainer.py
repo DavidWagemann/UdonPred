@@ -15,7 +15,7 @@ from transformers.trainer import *
 from peft import PeftModel
 
 import wandb
-from model.data import ClusterSampler
+from .data import ClusterSampler
 
 logger = logging.get_logger(__name__)
 

@@ -2,17 +2,18 @@ import argparse
 import inspect
 import os
 import sys
+from pathlib import Path
 
 import yaml
 from transformers.training_args import TrainingArguments
 
 import wandb
-from model.build_model import model_init, suggest
-from model.data import DataCollator, get_datasets
-from model.trainer import CustomTrainer
+from .model.build_model import model_init, suggest
+from .model.data import DataCollator, get_datasets
+from .model.trainer import CustomTrainer
 
 
-CONFIG_DIR = "config"
+CONFIG_DIR = str(Path(__file__).resolve().parent / "config")
 OUTPUT_DIR = "checkpoints"
 OPTIMIZED_PARAMETERS_DIR = "optimized_parameters"
 
@@ -222,13 +223,13 @@ def run_optimization(config, datasets, collator):
     )
 
     if "sampler" in config["config"]["optim"]:
-        from model.build_model import import_from_string
+        from .model.build_model import import_from_string
         config["config"]["optim"]["sampler"] = import_from_string(
             config["config"]["optim"]["sampler"]
         )()
 
     if "pruner" in config["config"]["optim"]:
-        from model.build_model import import_from_string
+        from .model.build_model import import_from_string
         config["config"]["optim"]["pruner"] = import_from_string(
             config["config"]["optim"]["pruner"]
         )()
@@ -247,9 +248,9 @@ def run_optimization(config, datasets, collator):
         yaml.dump(best_run.hyperparameters, f)
 
 
-def main(mode: str):
-    """Main execution function.
-    
+def run(mode: str):
+    """Load config and dispatch to training or hyperparameter optimization.
+
     Args:
         mode: Either 'train' or 'optimize'
     """
@@ -278,7 +279,8 @@ def main(mode: str):
         raise ValueError(f"Invalid mode: {mode}. Must be 'train' or 'optimize'.")
 
 
-if __name__ == "__main__":
+def main():
+    """Console entry point (``udonpred-train``): parse args and dispatch."""
     parser = argparse.ArgumentParser(
         description="Train or optimize a model for disorder prediction"
     )
@@ -287,6 +289,10 @@ if __name__ == "__main__":
         choices=["train", "optimize"],
         help="Mode to run: 'train' for training or 'optimize' for hyperparameter optimization"
     )
-    
+
     args = parser.parse_args()
-    main(args.mode)
+    run(args.mode)
+
+
+if __name__ == "__main__":
+    main()

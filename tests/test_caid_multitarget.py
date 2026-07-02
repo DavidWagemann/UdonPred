@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -5,20 +6,23 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from caid.predict import discover_targets
+from udonpred.caid.predict import discover_targets
 
 ROOT = Path(__file__).resolve().parent.parent
+SRC = ROOT / "src"
 WEIGHTS = ROOT / "weights"
 
 EXPECTED = {"atlas", "chezod", "disprot", "pdbflex", "plddt", "softdis", "trizod"}
 
 
 def _run(args, cwd):
+    env = {**os.environ, "PYTHONPATH": str(SRC)}
     return subprocess.run(
-        [sys.executable, "-m", "caid.predict", *args],
+        [sys.executable, "-m", "udonpred.caid.predict", *args],
         cwd=cwd,
         capture_output=True,
         text=True,
+        env=env,
     )
 
 

@@ -1,10 +1,11 @@
 """ProstT5 backbone loading, tokenization, and on-the-fly embedding.
 
-This is the *online* embedding path used by the standard ``predict.py`` runner
-and the ``embed.py`` helper. It is deliberately isolated from the rest of
-:mod:`udonpred` so that the CAID runner (``caid/predict.py``) can import the
-FASTA and ONNX-head helpers without pulling in ``torch``/``transformers`` or
-the protein language model itself.
+This is the *online* embedding path used by the on-the-fly runner
+(:mod:`udonpred.embedding.predict`) and the ``udonpred-embed`` helper
+(:mod:`udonpred.utils.embed`). It is deliberately isolated from the rest of
+:mod:`udonpred` so that the CAID runner (:mod:`udonpred.caid.predict`) can
+import the FASTA and ONNX-head helpers without pulling in
+``torch``/``transformers`` or the protein language model itself.
 
 Importing this module requires ``torch`` and ``transformers``; the CAID
 container does not install them.
@@ -13,7 +14,7 @@ container does not install them.
 from importlib import import_module
 from typing import List, Tuple
 
-from .fasta import sanitize_sequence
+from ..fasta import sanitize_sequence
 
 BACKBONE_NAME = "Rostlab/ProstT5_fp16"
 BACKBONE_MODEL_TYPE = "T5EncoderModel"

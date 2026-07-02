@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from caid.embeddings import align_embedding, load_precomputed_embeddings
+from udonpred.caid.embeddings import align_embedding, load_precomputed_embeddings
 
 
 # ---- align_embedding ---------------------------------------------------------

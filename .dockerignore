@@ -6,10 +6,9 @@ __pycache__
 tests
 eval
 images
-model
-config
-run.py
-export.py
-predict.py
-embed.py
+# Heavy, non-shipped subpackages — the CAID image only needs the torch-free core
+# (udonpred/{__init__,fasta,inference} and udonpred/caid).
+src/udonpred/embedding
+src/udonpred/training
+src/udonpred/utils
 *.md

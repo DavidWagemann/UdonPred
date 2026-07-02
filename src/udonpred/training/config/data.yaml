@@ -4,7 +4,7 @@ trizod:
   fraction: 1
   losses:
     y:
-      - class: model.losses.MSE
+      - class: udonpred.training.model.losses.MSE
         output: out_-1
         class_arguments: {}
         arguments: []
@@ -12,11 +12,11 @@ trizod:
 
   metrics:
     y:
-      - class: model.losses.MAE
+      - class: udonpred.training.model.losses.MAE
         output: out_-1
         class_arguments: {}
         arguments: []
-      - class: model.losses.Spearman
+      - class: udonpred.training.model.losses.Spearman
         output: out_-1
         class_arguments: {}
         arguments: []
@@ -26,7 +26,7 @@ chezod:
   fraction: 0
   losses:
     y:
-      - class: model.losses.MSE
+      - class: udonpred.training.model.losses.MSE
         output: out_-1
         class_arguments: {}
         arguments: []
@@ -34,11 +34,11 @@ chezod:
 
   metrics:
     y:
-      - class: model.losses.MAE
+      - class: udonpred.training.model.losses.MAE
         output: out_-1
         class_arguments: {}
         arguments: []
-      - class: model.losses.Spearman
+      - class: udonpred.training.model.losses.Spearman
         output: out_-1
         class_arguments: {}
         arguments: []
@@ -48,7 +48,7 @@ disprot:
   fraction: 0
   losses:
     y:
-      - class: model.losses.BCE
+      - class: udonpred.training.model.losses.BCE
         output: out_-1
         class_arguments: {}
         arguments: []
@@ -56,11 +56,11 @@ disprot:
 
   metrics:
     y:
-      - class: model.losses.AUROC
+      - class: udonpred.training.model.losses.AUROC
         output: out_-1
         class_arguments: {threshold: 0.5}
         arguments: []
-      - class: model.losses.AUPR
+      - class: udonpred.training.model.losses.AUPR
         output: out_-1
         class_arguments: {threshold: 0.5}
         arguments: []
@@ -70,7 +70,7 @@ pdbflex:
   fraction: 0
   losses:
     y:
-      - class: model.losses.MSE
+      - class: udonpred.training.model.losses.MSE
         output: out_-1
         class_arguments: {}
         arguments: []
@@ -78,11 +78,11 @@ pdbflex:
 
   metrics:
     y:
-      - class: model.losses.MAE
+      - class: udonpred.training.model.losses.MAE
         output: out_-1
         class_arguments: {}
         arguments: []
-      - class: model.losses.Spearman
+      - class: udonpred.training.model.losses.Spearman
         output: out_-1
         class_arguments: {}
         arguments: []
@@ -92,7 +92,7 @@ plddt:
   fraction: 0
   losses:
     y:
-      - class: model.losses.MSE
+      - class: udonpred.training.model.losses.MSE
         output: out_-1
         class_arguments: {}
         arguments: []
@@ -100,11 +100,11 @@ plddt:
 
   metrics:
     y:
-      - class: model.losses.MAE
+      - class: udonpred.training.model.losses.MAE
         output: out_-1
         class_arguments: {}
         arguments: []
-      - class: model.losses.Spearman
+      - class: udonpred.training.model.losses.Spearman
         output: out_-1
         class_arguments: {}
         arguments: []
@@ -114,7 +114,7 @@ softdis:
   fraction: 0
   losses:
     y:
-      - class: model.losses.MSE
+      - class: udonpred.training.model.losses.MSE
         output: out_-1
         class_arguments: {}
         arguments: []
@@ -122,11 +122,11 @@ softdis:
 
   metrics:
     y:
-      - class: model.losses.MAE
+      - class: udonpred.training.model.losses.MAE
         output: out_-1
         class_arguments: {}
         arguments: []
-      - class: model.losses.Spearman
+      - class: udonpred.training.model.losses.Spearman
         output: out_-1
         class_arguments: {}
         arguments: []
@@ -136,7 +136,7 @@ atlas:
   fraction: 0
   losses:
     y:
-      - class: model.losses.MSE
+      - class: udonpred.training.model.losses.MSE
         output: out_-1
         class_arguments: {}
         arguments: []
@@ -144,11 +144,11 @@ atlas:
 
   metrics:
     y:
-      - class: model.losses.MAE
+      - class: udonpred.training.model.losses.MAE
         output: out_-1
         class_arguments: {}
         arguments: []
-      - class: model.losses.Spearman
+      - class: udonpred.training.model.losses.Spearman
         output: out_-1
         class_arguments: {}
         arguments: []
