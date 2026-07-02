@@ -1,3 +1,6 @@
+# Each dataset's `path` basename (e.g. "trizod") doubles as the Hub config/target
+# name under udonpred/datasets, used to fetch precomputed embeddings when
+# config.embeddings.source is "auto"/"hub".
 
 trizod:
   path: "data/trizod"

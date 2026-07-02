@@ -43,11 +43,17 @@ hyperparameter_path: config/architecture.yaml
 
 # Backbone model configuration
 backbone:
-  name: "Rostlab/ProstT5_fp16" 
+  name: "Rostlab/ProstT5_fp16"
   tokenizer_type: "T5Tokenizer"
   model_type: "T5EncoderModel"
-  prefix_token: "<AA2fold>" 
+  prefix_token: "<AA2fold>"
   preprocessing_batch_size: 1
+
+# Embeddings: "auto" prefers precomputed embeddings from the Hub for the
+# backbone pLM (per dataset), falling back to on-the-fly compute; "compute"
+# always computes locally.
+embeddings:
+  source: auto
 
 # Optimization configuration
 optim:

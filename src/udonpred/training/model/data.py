@@ -12,6 +12,8 @@ from datasets import features as datasets_features
 from datasets.load import load_from_disk
 from ast import literal_eval
 
+from udonpred.datasets import plm_slug
+
 from .embedder import Embedder
 
 
@@ -273,6 +275,8 @@ def build_datasets(
     backbone_model: Any,
     map_batch_rows: int = 1,
     cache_dir: str = ".cache/embeddings",
+    plm: Optional[str] = None,
+    embeddings_source: str = "auto",
 ) -> DatasetDict:
     """Load a jsonl dataset, tokenize and embed sequences, and return a DatasetDict.
     
@@ -301,28 +305,55 @@ def build_datasets(
     dataset_name = os.path.basename(path)
     ds = ds.map(lambda x: {"dataset": dataset_name})
 
-    cache_path = os.path.join(cache_dir, f"{dataset_name}.sqlite")
+    # Precomputed-first: prefer per-pLM embeddings from the Hub for this pLM,
+    # falling back to on-the-fly compute below.
+    used_precomputed = False
+    if embeddings_source in ("auto", "hub") and plm is not None:
+        from udonpred.datasets import resolve_embeddings
+        from udonpred.training.model.embeddings import attach_precomputed_embeddings
 
-    cache = SQLiteCache(cache_path)
-    try:
-        process_fn = make_tokenize_and_embed_fn(backbone_model, cache)
+        file_split = {"train": "train", "validation": "valid", "test": "test"}
+        try:
+            attached = {
+                split: attach_precomputed_embeddings(
+                    ds[split],
+                    str(resolve_embeddings(dataset_name, file_split[split], plm)),
+                )
+                for split in ds.keys()
+            }
+            ds = DatasetDict(attached).with_format("torch")
+            used_precomputed = True
+        except Exception as exc:
+            if embeddings_source == "hub":
+                raise
+            print(
+                f"Precomputed embeddings unavailable for {dataset_name} ({exc}); "
+                "computing on the fly."
+            )
 
-        ds = ds.map(
-            process_fn,
-            batched=True,
-            batch_size=map_batch_rows,
-            desc="tokenizing and embedding",
-        )
+    if not used_precomputed:
+        cache_path = os.path.join(cache_dir, f"{dataset_name}.sqlite")
 
-        ds = ds.with_format("torch")
-    finally:
-        cache.close()
+        cache = SQLiteCache(cache_path)
+        try:
+            process_fn = make_tokenize_and_embed_fn(backbone_model, cache)
 
-    try:
-        if os.path.exists(cache_path):
-            os.remove(cache_path)
-    except OSError:
-        pass
+            ds = ds.map(
+                process_fn,
+                batched=True,
+                batch_size=map_batch_rows,
+                desc="tokenizing and embedding",
+            )
+
+            ds = ds.with_format("torch")
+        finally:
+            cache.close()
+
+        try:
+            if os.path.exists(cache_path):
+                os.remove(cache_path)
+        except OSError:
+            pass
     return ds
 
 
@@ -482,7 +513,11 @@ def get_datasets(
                 backbone_model,
                 backbone_config.get(
                     "preprocessing_batch_size", 1
-                ),  
+                ),
+                plm=plm_slug(backbone_config["name"]),
+                embeddings_source=config["config"]
+                .get("embeddings", {})
+                .get("source", "auto"),
             )
             ds.save_to_disk(hf_path)
 
