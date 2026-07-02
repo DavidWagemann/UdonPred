@@ -1,9 +1,11 @@
-"""Guard the torch-free boundary of the shipped CAID inference path.
+"""Guard the lean, offline boundary of the shipped CAID inference path.
 
-Importing :mod:`udonpred.caid.predict` (and the core it depends on) must never
-pull in ``torch``. The CAID4 container installs only the lean dependency set, so
-a stray top-level ``import torch`` anywhere on this path would break it. Run in
-a subprocess so the check is independent of what the test process has imported.
+Importing :mod:`udonpred.caid.predict` (and the core it depends on, including
+the head resolver :mod:`udonpred.heads`) must never pull in ``torch`` or
+``huggingface_hub``. The CAID4 container installs only the lean dependency set
+and consumes heads baked in at build time, so a stray top-level import of either
+would break it. Run in a subprocess so the check is independent of what the test
+process has already imported.
 """
 
 import os
@@ -20,8 +22,11 @@ def test_caid_inference_path_never_imports_torch():
         "import udonpred.caid.embeddings\n"
         "import udonpred.fasta\n"
         "import udonpred.inference\n"
+        "import udonpred.heads\n"
         "import sys\n"
         "assert 'torch' not in sys.modules, 'torch leaked into the CAID path'\n"
+        "assert 'huggingface_hub' not in sys.modules, "
+        "'huggingface_hub leaked into the CAID path'\n"
     )
     env = {**os.environ, "PYTHONPATH": str(SRC)}
     result = subprocess.run(

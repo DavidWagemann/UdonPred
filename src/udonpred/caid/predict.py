@@ -21,6 +21,11 @@ import sys
 from pathlib import Path
 
 from udonpred.fasta import format_predictions, read_fasta
+from udonpred.heads import (
+    DEFAULT_HEADS_REPO,
+    DEFAULT_HEADS_REVISION,
+    resolve_model_dir,
+)
 from udonpred.inference import load_head, score_embeddings, smooth_scores
 
 from udonpred.caid.embeddings import align_embedding, load_precomputed_embeddings
@@ -51,21 +56,22 @@ def resolve_targets(model_dir, requested: list[str]) -> list[str]:
 
 def run(
     fasta: str,
-    model_dir: str,
+    model_dir: str | None,
     embeddings: str,
     target: list[str],
     output_path: str | None,
     device: str,
     threads: int | None,
     smooth: float,
+    revision: str | None = None,
 ) -> None:
     entries = read_fasta(fasta)
     if not entries:
         raise ValueError("No FASTA entries found.")
 
-    model_dir_path = Path(model_dir)
-    if not model_dir_path.is_dir():
-        raise ValueError(f"Model directory not found: {model_dir}")
+    # model_dir may be a local directory (used as-is, offline) or a Hub repo id;
+    # omitting it pulls the pinned release from the Hub.
+    model_dir_path = resolve_model_dir(model_dir, revision)
 
     targets = resolve_targets(model_dir_path, target)
     multi = len(targets) > 1
@@ -117,7 +123,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("fasta", type=str, help="Path to input FASTA file")
     parser.add_argument(
-        "model_dir", type=str, help="Directory containing ONNX head files"
+        "model_dir",
+        type=str,
+        nargs="?",
+        default=None,
+        help="Directory containing the ONNX heads, or a Hugging Face repo id. "
+        f"A local directory is used as-is (offline). Omit to pull the pinned "
+        f"Hub release ({DEFAULT_HEADS_REPO} @ {DEFAULT_HEADS_REVISION}).",
+    )
+    parser.add_argument(
+        "--revision",
+        type=str,
+        default=None,
+        help="Hub revision (tag/branch/commit) to pull heads from when model_dir "
+        f"is a repo id or omitted (default: {DEFAULT_HEADS_REVISION}).",
     )
     parser.add_argument(
         "--embeddings",
@@ -186,6 +205,7 @@ def main() -> None:
         device=args.device,
         threads=args.threads,
         smooth=args.smooth,
+        revision=args.revision,
     )
 
 

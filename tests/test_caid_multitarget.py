@@ -10,7 +10,6 @@ from udonpred.caid.predict import discover_targets
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
-WEIGHTS = ROOT / "weights"
 
 EXPECTED = {"atlas", "chezod", "disprot", "pdbflex", "plddt", "softdis", "trizod"}
 
@@ -26,11 +25,11 @@ def _run(args, cwd):
     )
 
 
-def test_discover_targets_finds_all_onnx_stems():
-    assert set(discover_targets(WEIGHTS)) == EXPECTED
+def test_discover_targets_finds_all_onnx_stems(weights_dir):
+    assert set(discover_targets(weights_dir)) == EXPECTED
 
 
-def test_all_targets_writes_one_file_per_head_same_dir(tmp_path):
+def test_all_targets_writes_one_file_per_head_same_dir(tmp_path, weights_dir):
     seq = "MKTAYIAKQR"
     (tmp_path / "in.fasta").write_text(f">seq1\n{seq}\n")
     np.save(tmp_path / "emb.npy", np.random.randn(len(seq), 1024).astype(np.float32))
@@ -39,7 +38,7 @@ def test_all_targets_writes_one_file_per_head_same_dir(tmp_path):
     res = _run(
         [
             str(tmp_path / "in.fasta"),
-            str(WEIGHTS),
+            str(weights_dir),
             "--embeddings",
             str(tmp_path / "emb.npy"),
             "--target",
@@ -61,7 +60,7 @@ def test_all_targets_writes_one_file_per_head_same_dir(tmp_path):
     assert not any(p.is_dir() for p in outdir.iterdir())
 
 
-def test_explicit_multiple_targets(tmp_path):
+def test_explicit_multiple_targets(tmp_path, weights_dir):
     seq = "MKTAYIAKQR"
     (tmp_path / "in.fasta").write_text(f">seq1\n{seq}\n")
     np.save(tmp_path / "emb.npy", np.random.randn(len(seq), 1024).astype(np.float32))
@@ -70,7 +69,7 @@ def test_explicit_multiple_targets(tmp_path):
     res = _run(
         [
             str(tmp_path / "in.fasta"),
-            str(WEIGHTS),
+            str(weights_dir),
             "--embeddings",
             str(tmp_path / "emb.npy"),
             "--target",
@@ -89,7 +88,7 @@ def test_explicit_multiple_targets(tmp_path):
     assert not (outdir / "udonpred_atlas.caid").exists()
 
 
-def test_one_file_per_head_holds_all_proteins(tmp_path):
+def test_one_file_per_head_holds_all_proteins(tmp_path, weights_dir):
     seqs = {"seq1": "MKTAYIAKQR", "seq2": "GGGCCCDDD"}
     (tmp_path / "in.fasta").write_text(
         "".join(f">{h}\n{s}\n" for h, s in seqs.items())
@@ -103,7 +102,7 @@ def test_one_file_per_head_holds_all_proteins(tmp_path):
     res = _run(
         [
             str(tmp_path / "in.fasta"),
-            str(WEIGHTS),
+            str(weights_dir),
             "--embeddings",
             str(tmp_path / "emb.h5"),
             "--target",

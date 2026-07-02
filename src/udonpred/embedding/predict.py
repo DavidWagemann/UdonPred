@@ -26,6 +26,11 @@ from udonpred.embedding.backbone import (
     tokenize_batch,
 )
 from udonpred.fasta import format_predictions, read_fasta
+from udonpred.heads import (
+    DEFAULT_HEADS_REPO,
+    DEFAULT_HEADS_REVISION,
+    resolve_model_dir,
+)
 from udonpred.inference import (
     count_batches,
     iter_batches,
@@ -98,7 +103,13 @@ def main() -> None:
     )
     parser.add_argument("fasta", type=str, help="Path to input FASTA file")
     parser.add_argument(
-        "model_dir", type=str, help="Directory containing ONNX head files"
+        "model_dir",
+        type=str,
+        nargs="?",
+        default=None,
+        help="Directory containing the ONNX heads, or a Hugging Face repo id. "
+        f"A local directory is used as-is (offline). Omit to pull the pinned "
+        f"Hub release ({DEFAULT_HEADS_REPO} @ {DEFAULT_HEADS_REVISION}).",
     )
     parser.add_argument(
         "--target",
@@ -106,6 +117,13 @@ def main() -> None:
         type=str,
         default="trizod",
         help="Prediction type — must match a {target}.onnx file in model_dir",
+    )
+    parser.add_argument(
+        "--revision",
+        type=str,
+        default=None,
+        help="Hub revision (tag/branch/commit) to pull heads from when model_dir "
+        f"is a repo id or omitted (default: {DEFAULT_HEADS_REVISION}).",
     )
     parser.add_argument(
         "--output",
@@ -154,12 +172,13 @@ def main() -> None:
 
     entries = sorted(entries, key=lambda item: len(item[1]), reverse=True)
 
-    if not Path(args.model_dir).is_dir():
-        raise ValueError("Model directory not found.")
+    # Local directory (used as-is) or a Hub repo id; omitting it pulls the
+    # pinned release from the Hub.
+    model_dir = str(resolve_model_dir(args.model_dir, args.revision))
 
     run_exported(
         entries,
-        args.model_dir,
+        model_dir,
         args.target,
         args.batch_size,
         args.output,

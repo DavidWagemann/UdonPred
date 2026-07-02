@@ -43,9 +43,13 @@ training = [
     "py3dmol>=2.5.3",
     "biopython>=1.86",
 ]
+# Pull prediction heads from the Hugging Face Hub (udonpred/prediction-heads).
+# Not needed by the CAID container, which consumes heads baked in at build time.
+hub = ["huggingface_hub>=0.25"]
 
 [dependency-groups]
 dev = [
+    "udonpred-comp[hub]",
     "jupyterlab>=4.2",
     "ipykernel>=7.1.0",
     "ipywidgets>=8.1.8",

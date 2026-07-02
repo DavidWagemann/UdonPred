@@ -20,7 +20,7 @@ def _run(args, cwd):
     )
 
 
-def test_caid_predict_npy_single_sequence_to_stdout(tmp_path):
+def test_caid_predict_npy_single_sequence_to_stdout(tmp_path, weights_dir):
     seq = "MKTAYIAKQR"
     (tmp_path / "in.fasta").write_text(f">seq1\n{seq}\n")
     # L+2 layout (prefix + residues + eos) to also exercise alignment
@@ -30,7 +30,7 @@ def test_caid_predict_npy_single_sequence_to_stdout(tmp_path):
     res = _run(
         [
             str(tmp_path / "in.fasta"),
-            str(ROOT / "weights"),
+            str(weights_dir),
             "--embeddings",
             str(tmp_path / "emb.npy"),
             "--target",
@@ -51,7 +51,7 @@ def test_caid_predict_npy_single_sequence_to_stdout(tmp_path):
     assert 0.0 <= float(first[2]) <= 1.0
 
 
-def test_caid_predict_writes_one_file_per_head(tmp_path):
+def test_caid_predict_writes_one_file_per_head(tmp_path, weights_dir):
     seq = "MKTAYIAKQR"
     (tmp_path / "in.fasta").write_text(f">seq1\n{seq}\n")
     np.save(tmp_path / "emb.npy", np.random.randn(len(seq), 1024).astype(np.float32))
@@ -60,7 +60,7 @@ def test_caid_predict_writes_one_file_per_head(tmp_path):
     res = _run(
         [
             str(tmp_path / "in.fasta"),
-            str(ROOT / "weights"),
+            str(weights_dir),
             "--embeddings",
             str(tmp_path / "emb.npy"),
             "--output",
