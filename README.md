@@ -26,7 +26,7 @@ Generate the embeddings beforehand (outside the container) with
 ProstT5 model `Rostlab/ProstT5_fp16`; see [EMBEDDINGS.md](EMBEDDINGS.md) for the
 full specification:
 ```
-python embed.py input.fasta --output embeddings.h5
+uv run --extra embedding udonpred-embed input.fasta --output embeddings.h5
 ```
 
 Options:
@@ -41,7 +41,7 @@ holding the predictions for **all** input proteins concatenated, written flat in
 output directory (e.g. `out/udonpred_trizod.caid`, `out/udonpred_disprot.caid`).
 
 #### How to Generate Embeddings
-**Important note:** The CAID4 predictor (`caid/predict.py`) does **not** run the protein language
+**Important note:** The CAID4 predictor (`udonpred-caid`, i.e. `udonpred.caid.predict`) does **not** run the protein language
 model. It consumes per-residue **ProstT5** embeddings that are precomputed and
 passed in via `--embeddings`. This document is the exact specification for
 generating them.
@@ -72,23 +72,24 @@ Expected format: **`.h5`** — one dataset per sequence, keyed by the **FASTA he
   after `>`, whitespace-trimmed). Use this for multi-sequence FASTA files.
 
 ##### Usage
-The repository ships `embed.py`, which produces embeddings in exactly the
+The repository ships the `udonpred-embed` command
+(`udonpred.utils.embed`), which produces embeddings in exactly the
 expected layout (trimmed to `(L, 1024)`, float32, ambiguous residues mapped to
 `X`):
 
 ```bash
 # Multi-sequence -> HDF5 keyed by FASTA header
-python embed.py input.fasta --output embeddings.h5
+uv run --extra embedding udonpred-embed input.fasta --output embeddings.h5
 ```
 
-`embed.py` requires `torch` and `transformers` (see `pyproject.toml`); it is the
-only component that downloads/loads ProstT5 and is intentionally **outside** the
-CAID inference container.
+`udonpred-embed` requires the `embedding` extra (`torch` + `transformers`;
+`uv sync --extra embedding`); it is the only component that downloads/loads
+ProstT5 and is intentionally **outside** the CAID inference container.
 
 ### Manually
 1. `git clone https://github.com/davidwagemann/udonpred.git .`
-2. `uv sync`
-3. `uv run predict.py {path to fasta} {path to weights}`
+2. `uv sync --extra embedding` (the on-the-fly predictor needs `torch` + `transformers`; plain `uv sync` installs only the lean inference core)
+3. `uv run udonpred-predict {path to fasta} {path to weights}`
 
 You can use the following options:
 - `--target`: chooses the model trained on the specified dataset (trizod, chezod, softdis, pdbflex, atlas, plddt, disprot). The default is trizod.
@@ -98,9 +99,9 @@ You can use the following options:
 - `--smooth`: Applies gaussian smoothing with the give sigma to the results in order to remove prediction noise. 
 
 ## Retraining
-UdonPred can be retrained by placing the required data as jsonl files in a data/ subfolder and pointing to it in `config/data.yaml`. The training configuration and architecture can be changed in `config/config.yaml` and `config/architecture.yaml` respectively. To start the training process, run `uv run run.py train`. 
+Install the training stack with `uv sync --extra training`. UdonPred can be retrained by placing the required data as jsonl files in a data/ subfolder and pointing to it in `src/udonpred/training/config/data.yaml`. The training configuration and architecture can be changed in `src/udonpred/training/config/config.yaml` and `src/udonpred/training/config/architecture.yaml` respectively. To start the training process, run `uv run udonpred-train train`.
 
-After training is complete, a checkpoint can be exported for use with the prediction script using `uv run export.py {path to checkpoint}`. For export options, see `uv run export.py --help`.
+After training is complete, a checkpoint can be exported for use with the prediction script using `uv run udonpred-export {path to checkpoint}`. For export options, see `uv run udonpred-export --help`.
 
 ## How to Cite
 ```
