@@ -23,6 +23,7 @@ def test_caid_inference_path_never_imports_torch():
         "import udonpred.fasta\n"
         "import udonpred.inference\n"
         "import udonpred.heads\n"
+        "import udonpred.datasets\n"
         "import sys\n"
         "assert 'torch' not in sys.modules, 'torch leaked into the CAID path'\n"
         "assert 'huggingface_hub' not in sys.modules, "

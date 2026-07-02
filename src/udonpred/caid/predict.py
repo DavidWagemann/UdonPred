@@ -20,6 +20,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from udonpred.datasets import resolve_embeddings_ref
 from udonpred.fasta import format_predictions, read_fasta
 from udonpred.heads import (
     DEFAULT_HEADS_REPO,
@@ -76,7 +77,9 @@ def run(
     targets = resolve_targets(model_dir_path, target)
     multi = len(targets) > 1
 
-    source = load_precomputed_embeddings(embeddings)
+    # `embeddings` may be a local .h5/.npy path or a Hub reference
+    # (repo_id:path_in_repo[@revision]).
+    source = load_precomputed_embeddings(str(resolve_embeddings_ref(embeddings)))
     # Load every requested head once; the embedding is computed/aligned once per
     # sequence and reused across all heads.
     heads = {
@@ -144,7 +147,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         required=True,
         help="Path to precomputed ProstT5 embeddings (.npy single sequence, "
-        "or .h5 keyed by FASTA header).",
+        "or .h5 keyed by FASTA header), or a Hub reference like "
+        "udonpred/datasets:trizod/embeddings/prostt5/test.h5.",
     )
     parser.add_argument(
         "--target",
