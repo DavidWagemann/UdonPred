@@ -34,8 +34,19 @@ from udonpred.embedding.backbone import (
     resolve_device,
     tokenize_batch,
 )
+from udonpred.datasets import plm_slug
 from udonpred.fasta import read_fasta
 from udonpred.inference import count_batches, iter_batches
+from udonpred.utils.publish import publish_embeddings
+
+
+def push_embeddings_to_hub(
+    output: str, dataset: str, split: str, backbone_name: str, repo: str | None = None
+) -> None:
+    """Upload a generated embeddings .h5 to the dataset repo for a pLM."""
+    publish_embeddings(
+        output, target=dataset, split=split, plm=plm_slug(backbone_name), repo=repo
+    )
 
 
 def generate(
@@ -123,8 +134,36 @@ def main() -> None:
         default=2000,
         help="Max total sequence length per batch (dynamic batching).",
     )
+    parser.add_argument(
+        "--push-to-hub",
+        action="store_true",
+        help="Upload the generated .h5 to the udonpred/datasets repo.",
+    )
+    parser.add_argument(
+        "--dataset",
+        default=None,
+        help="Target name for --push-to-hub (e.g. trizod).",
+    )
+    parser.add_argument(
+        "--split",
+        default=None,
+        choices=["train", "valid", "test"],
+        help="Split name for --push-to-hub.",
+    )
+    parser.add_argument(
+        "--repo",
+        default=None,
+        help="Override the dataset repo for --push-to-hub.",
+    )
     args = parser.parse_args()
     generate(args.fasta, args.output, args.device, args.batch_size)
+
+    if args.push_to_hub:
+        if not (args.dataset and args.split):
+            parser.error("--push-to-hub requires --dataset and --split")
+        push_embeddings_to_hub(
+            args.output, args.dataset, args.split, BACKBONE_NAME, args.repo
+        )
 
 
 if __name__ == "__main__":
