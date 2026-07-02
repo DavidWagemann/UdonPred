@@ -128,6 +128,32 @@ Remember to bump `DEFAULT_HEADS_REVISION` in `src/udonpred/heads.py` (and the
 the container pull the new heads by default. Omit `--push-to-hub` to export
 locally only. For all options, see `uv run udonpred-export --help`.
 
+### Datasets & embeddings on the Hub
+The per-target datasets live in the public dataset repo
+[`udonpred/datasets`](https://huggingface.co/datasets/udonpred/datasets), one
+config per target (`trizod2` excluded):
+
+```python
+from datasets import load_dataset
+ds = load_dataset("udonpred/datasets", "trizod")   # train / validation / test
+```
+
+Each target holds `train/valid/test` as jsonl (`{id, y, x_0}`) + FASTA, and
+precomputed per-pLM embeddings at `<target>/embeddings/<plm>/<split>.h5` (keyed
+by the jsonl `id`).
+
+- **Publish datasets:** `uv run udonpred-publish-dataset data/split` uploads
+  every target's jsonl+fasta and (re)writes the dataset card.
+- **Precomputed-first training:** with `config.embeddings.source: auto`,
+  `build_datasets` pulls embeddings for the backbone pLM from the Hub when
+  available and only computes on the fly as a fallback.
+- **Publish embeddings** (needs the `embedding` extra + a GPU):
+  `uv run --extra embedding udonpred-embed <target>/test.fasta -o test.h5
+  --push-to-hub --dataset <target> --split test`.
+- **Consume embeddings at inference:** `--embeddings` accepts a Hub reference,
+  e.g. `--embeddings udonpred/datasets:trizod/embeddings/prostt5/test.h5`
+  (optionally `…@revision`), in addition to a local `.h5`/`.npy`.
+
 ## How to Cite
 ```
 @article {UdonPred,
