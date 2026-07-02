@@ -31,3 +31,5 @@ checkpoints/
 data/*/*
 exported/
 eval/figures/*
+# ONNX prediction heads now live on the Hub (udonpred/prediction-heads)
+weights/
