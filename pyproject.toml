@@ -65,6 +65,8 @@ udonpred-embed = "udonpred.utils.embed:main"
 # Training and checkpoint -> ONNX export (needs [training]).
 udonpred-train = "udonpred.training.run:main"
 udonpred-export = "udonpred.utils.export:main"
+# Publish datasets (train/valid/test jsonl+fasta) to the Hub (needs [hub]).
+udonpred-publish-dataset = "udonpred.utils.publish:main"
 
 [build-system]
 requires = ["hatchling"]
