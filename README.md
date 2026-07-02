@@ -86,10 +86,9 @@ only component that downloads/loads ProstT5 and is intentionally **outside** the
 CAID inference container.
 
 ### Manually
-1. `git clone https://github.com/DavidWagemann/UdonPred.git`
-2. `cd UdonPred`
-3. `uv sync`
-4. `uv run predict.py {path to fasta} {path to weights}`
+1. `git clone https://github.com/davidwagemann/udonpred.git .`
+2. `uv sync`
+3. `uv run predict.py {path to fasta} {path to weights}`
 
 You can use the following options:
 - `--target`: chooses the model trained on the specified dataset (trizod, chezod, softdis, pdbflex, atlas, plddt, disprot). The default is trizod.
