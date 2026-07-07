@@ -52,8 +52,12 @@ backbone:
 # Embeddings: "auto" prefers precomputed embeddings from the Hub for the
 # backbone pLM (per dataset), falling back to on-the-fly compute; "compute"
 # always computes locally.
+# `plm` overrides the embeddings slug (default: derived from backbone.name);
+# set it to fetch a different pLM's precomputed embeddings (e.g. frustraiseq)
+# while keeping backbone.name for tokenization/on-the-fly fallback.
 embeddings:
-  source: auto
+  source: hub
+  plm: frustraiseq
 
 # Optimization configuration
 optim:

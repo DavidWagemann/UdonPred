@@ -514,7 +514,10 @@ def get_datasets(
                 backbone_config.get(
                     "preprocessing_batch_size", 1
                 ),
-                plm=plm_slug(backbone_config["name"]),
+                plm=(
+                    config["config"].get("embeddings", {}).get("plm")
+                    or plm_slug(backbone_config["name"])
+                ),
                 embeddings_source=config["config"]
                 .get("embeddings", {})
                 .get("source", "auto"),

@@ -3,7 +3,7 @@
 # config.embeddings.source is "auto"/"hub".
 
 trizod:
-  path: "data/trizod"
+  path: "data/split/trizod"
   fraction: 1
   losses:
     y:
@@ -25,8 +25,8 @@ trizod:
         arguments: []
 
 chezod:
-  path: "data/chezod"
-  fraction: 0
+  path: "data/split/chezod"
+  fraction: 1
   losses:
     y:
       - class: udonpred.training.model.losses.MSE
