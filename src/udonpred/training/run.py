@@ -262,6 +262,14 @@ def run(mode: str):
 
     sys.modules["config"] = config
 
+    # Resolve the hyperparameter file relative to the packaged config dir when it
+    # isn't found relative to the cwd, so training runs from any directory.
+    hp_path = config["config"]["hyperparameter_path"]
+    if not os.path.isabs(hp_path) and not os.path.exists(hp_path):
+        config["config"]["hyperparameter_path"] = os.path.join(
+            CONFIG_DIR, os.path.basename(hp_path)
+        )
+
     os.environ["CUDA_VISIBLE_DEVICES"] = str(config["config"]["cuda_devices"])
 
     data = get_data(config)
