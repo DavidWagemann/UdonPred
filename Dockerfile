@@ -10,7 +10,7 @@ FROM python:3.13-slim AS heads
 
 # Overridable at build time, e.g. `--build-arg HEADS_REVISION=main` for latest.
 ARG HEADS_REPO=udonpred/prediction-heads
-ARG HEADS_REVISION=v0.1.0
+ARG HEADS_REVISION=v0.2.0
 ENV HEADS_REPO=${HEADS_REPO} \
     HEADS_REVISION=${HEADS_REVISION}
 

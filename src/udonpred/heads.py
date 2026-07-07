@@ -17,7 +17,7 @@ from pathlib import Path
 # Source of truth for the released prediction heads.
 DEFAULT_HEADS_REPO = "udonpred/prediction-heads"
 # Pinned, overridable: bump this (and publish a matching tag) on retraining.
-DEFAULT_HEADS_REVISION = "v0.1.0"
+DEFAULT_HEADS_REVISION = "v0.2.0"
 
 # Environment overrides (all optional).
 ENV_HEADS_DIR = "UDONPRED_HEADS_DIR"
