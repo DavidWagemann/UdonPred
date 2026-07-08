@@ -1,12 +1,4 @@
 #!/bin/bash
-# Train UdonPred (trizod + chezod on FrustrAISeq embeddings) on the LRZ AI
-# systems via pyxis/enroot. Submit from the project root:
-#
-#     cd /dss/.../ge39reb3/udonpred
-#     sbatch slurm/train.sbatch
-#
-# The heavy lifting (uv sync, dataset download, training) happens inside the
-# container in slurm/run_training.sh. All tunable knobs stay in config/.
 #SBATCH --job-name=udonpred-train
 #SBATCH --partition=lrz-hgx-h100-94x4,lrz-hgx-a100-80x4,lrz-dgx-a100-80x8
 #SBATCH --ntasks=1
@@ -15,7 +7,6 @@
 #SBATCH --time=24:00:00
 #SBATCH --output=slurm/logs/%x-%j.out
 #SBATCH --error=slurm/logs/%x-%j.out
-## #SBATCH --account=pn67na    # uncomment/adjust if your project requires it
 
 set -euo pipefail
 
