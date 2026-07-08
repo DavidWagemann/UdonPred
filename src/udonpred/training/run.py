@@ -13,7 +13,9 @@ from .model.data import DataCollator, get_datasets
 from .model.trainer import CustomTrainer
 
 
-CONFIG_DIR = str(Path(__file__).resolve().parent / "config")
+# Top-level config/ dir at the repo root (run.py is src/udonpred/training/run.py,
+# so parents[3] is the repo root). Kept out of the packaged src tree.
+CONFIG_DIR = str(Path(__file__).resolve().parents[3] / "config")
 OUTPUT_DIR = "checkpoints"
 OPTIMIZED_PARAMETERS_DIR = "optimized_parameters"
 

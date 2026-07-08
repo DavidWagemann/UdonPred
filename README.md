@@ -114,7 +114,7 @@ You can use the following options:
 - `--smooth`: Applies gaussian smoothing with the give sigma to the results in order to remove prediction noise. 
 
 ## Retraining
-Install the training stack with `uv sync --extra training`. UdonPred can be retrained by placing the required data as jsonl files in a data/ subfolder and pointing to it in `src/udonpred/training/config/data.yaml`. The training configuration and architecture can be changed in `src/udonpred/training/config/config.yaml` and `src/udonpred/training/config/architecture.yaml` respectively. To start the training process, run `uv run udonpred-train train`.
+Install the training stack with `uv sync --extra training`. UdonPred can be retrained by placing the required data as jsonl files in a data/ subfolder and pointing to it in `config/data.yaml`. The training configuration and architecture can be changed in `config/config.yaml` and `config/architecture.yaml` respectively. To start the training process, run `uv run udonpred-train train`.
 
 After training is complete, export the checkpoint to ONNX and publish the heads
 to the Hub in one step:
