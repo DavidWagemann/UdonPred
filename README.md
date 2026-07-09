@@ -116,6 +116,8 @@ You can use the following options:
 ## Retraining
 Install the training stack with `uv sync --extra training`. UdonPred can be retrained by placing the required data as jsonl files in a data/ subfolder and pointing to it in `config/data.yaml`. The training configuration and architecture can be changed in `config/config.yaml` and `config/architecture.yaml` respectively. To start the training process, run `uv run udonpred-train train`.
 
+To restrict training (and its validation/test metrics) to longer proteins, set `min_length` in `config/config.yaml` (residues; `0` keeps all, e.g. `50` or `100` to drop short peptides). The same threshold is available when evaluating existing heads: `uv run --extra hub python eval_trizod_heads.py --min-length 50`.
+
 After training is complete, export the checkpoint to ONNX and publish the heads
 to the Hub in one step:
 ```

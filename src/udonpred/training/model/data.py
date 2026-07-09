@@ -13,6 +13,7 @@ from datasets.load import load_from_disk
 from ast import literal_eval
 
 from udonpred.datasets import plm_slug
+from udonpred.filtering import meets_min_length
 
 from .embedder import Embedder
 
@@ -487,6 +488,10 @@ def get_datasets(
     """
     data_config = config["data"]
     backbone_config = config["config"]["backbone"]
+    # Keep only proteins with >= min_length residues (0 = keep all). Applied to
+    # every split below so training and its valid/test metrics use the same
+    # length-restricted population.
+    min_length = config["config"].get("min_length", 0)
 
     backbone_model = Embedder(
         backbone_name=backbone_config["name"],
@@ -526,6 +531,15 @@ def get_datasets(
 
         if train_filter is not None and "train" in ds:
             ds["train"] = ds["train"].filter(lambda x: x["id"] in train_filter)
+
+        # Min-length filter, applied post-load so it's independent of the hf/
+        # embedding cache (changing min_length needs no cache clearing) and
+        # composes with the id filter above.
+        if min_length:
+            for split in list(ds.keys()):
+                ds[split] = ds[split].filter(
+                    lambda row: meets_min_length(row, min_length)
+                )
 
         datasets.append(ds)
 

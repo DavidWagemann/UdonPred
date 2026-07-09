@@ -37,6 +37,9 @@ outputs: ["out_-1"]
 # Data processing
 cluster: False
 filter: False
+# Minimum protein length (residues) to train/validate/test on; 0 keeps all.
+# e.g. 50 or 100 to restrict to longer proteins, dropping short peptides.
+min_length: 0
 
 # Hyperparameter configuration
 hyperparameter_path: config/architecture.yaml
