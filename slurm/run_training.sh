@@ -4,6 +4,21 @@ set -euo pipefail
 # Move to the project root (parent of this slurm/ dir) regardless of workdir.
 cd "$(dirname "$(readlink -f "$0")")/.."
 
+# Optional target + embeddings pLM for this run (passed by train.sbatch's job
+# array). Trains on the single target with that pLM, under a distinct run name /
+# checkpoint dir (checkpoints/<target>-<plm>) and W&B run.
+TARGET="${1:-}"
+PLM="${2:-}"
+if [ -n "$TARGET" ]; then
+  export UDONPRED_TARGET="$TARGET"
+fi
+if [ -n "$PLM" ]; then
+  export UDONPRED_EMBEDDINGS_PLM="$PLM"
+fi
+if [ -n "$TARGET" ] && [ -n "$PLM" ]; then
+  export UDONPRED_RUN_NAME="$TARGET-$PLM"
+fi
+
 # Node-local scratch. Fixed (not per-job) so the venv + embeddings cache are
 # reused across jobs that land on the same node. If /tmp is RAM-backed (tmpfs)
 # on these nodes, point SCRATCH at the node's local SSD instead (a multi-GB venv
@@ -32,5 +47,15 @@ fi
 command -v uv >/dev/null || pip install --no-cache-dir uv
 
 uv sync --extra training --extra hub
+
+# Single-process (1 GPU) training. Under srun, HF Trainer/accelerate detect the
+# SLURM env and try to init torch.distributed via env:// rendezvous, which fails
+# with "WORLD_SIZE expected, but not set". Pin a 1-rank world so the process
+# group initializes cleanly instead. Override these for a real multi-GPU launch.
+export MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
+export MASTER_PORT="${MASTER_PORT:-29500}"
+export RANK="${RANK:-0}"
+export LOCAL_RANK="${LOCAL_RANK:-0}"
+export WORLD_SIZE="${WORLD_SIZE:-1}"
 
 uv run udonpred-train train

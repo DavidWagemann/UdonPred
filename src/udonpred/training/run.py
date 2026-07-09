@@ -264,6 +264,25 @@ def run(mode: str):
 
     sys.modules["config"] = config
 
+    # Optional env overrides so one config can drive several runs (e.g. a Slurm
+    # job array sweeping target x embeddings pLM). Kept explicit and few.
+    if os.environ.get("UDONPRED_RUN_NAME"):
+        config["config"]["run_name"] = os.environ["UDONPRED_RUN_NAME"]
+    if os.environ.get("UDONPRED_EMBEDDINGS_PLM"):
+        config["config"].setdefault("embeddings", {})["plm"] = os.environ[
+            "UDONPRED_EMBEDDINGS_PLM"
+        ]
+    # Train on a single target: activate only it (fraction 1), zero the rest.
+    target = os.environ.get("UDONPRED_TARGET")
+    if target:
+        if target not in config["data"]:
+            raise ValueError(
+                f"UDONPRED_TARGET={target!r} not in data config: "
+                f"{sorted(config['data'])}"
+            )
+        for name in config["data"]:
+            config["data"][name]["fraction"] = 1 if name == target else 0
+
     # Resolve the hyperparameter file relative to the packaged config dir when it
     # isn't found relative to the cwd, so training runs from any directory.
     hp_path = config["config"]["hyperparameter_path"]

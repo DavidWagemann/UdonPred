@@ -508,7 +508,14 @@ def get_datasets(
 
         path = dataset_conf["path"]
 
-        hf_path = os.path.join(path, "hf")
+        # Cache the built (embedding-attached) dataset per pLM, so switching
+        # embeddings (e.g. frustraiseq vs prostt5) doesn't reuse another pLM's
+        # cached embeddings.
+        plm = (
+            config["config"].get("embeddings", {}).get("plm")
+            or plm_slug(backbone_config["name"])
+        )
+        hf_path = os.path.join(path, f"hf-{plm}")
 
         if os.path.exists(hf_path) and os.path.isdir(hf_path):
             ds = load_from_disk(hf_path)
@@ -519,10 +526,7 @@ def get_datasets(
                 backbone_config.get(
                     "preprocessing_batch_size", 1
                 ),
-                plm=(
-                    config["config"].get("embeddings", {}).get("plm")
-                    or plm_slug(backbone_config["name"])
-                ),
+                plm=plm,
                 embeddings_source=config["config"]
                 .get("embeddings", {})
                 .get("source", "auto"),

@@ -5,8 +5,9 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=16
 #SBATCH --time=24:00:00
-#SBATCH --output=slurm/logs/%x-%j.out
-#SBATCH --error=slurm/logs/%x-%j.out
+#SBATCH --output=slurm/logs/%x-%A_%a.out
+#SBATCH --error=slurm/logs/%x-%A_%a.out
+#SBATCH --array=0-3%1
 
 set -euo pipefail
 
@@ -17,8 +18,15 @@ MOUNT=/mnt/udonpred
 
 mkdir -p "$PROJECT/slurm/logs"
 
+# One array task per (target x pLM), trained separately (no dataset mixing):
+# trizod then chezod, each on frustraiseq then prostt5. Sequential via %1 so each
+# task reuses the warm venv + HF cache, with no concurrent uv-sync race.
+TARGETS=(trizod trizod chezod chezod)
+PLMS=(frustraiseq prostt5 frustraiseq prostt5)
+i="${SLURM_ARRAY_TASK_ID:-0}"
+
 srun \
   --container-image="$IMAGE" \
   --no-container-mount-home \
   --container-mounts="$PROJECT:$MOUNT" \
-  bash "$MOUNT/slurm/run_training.sh"
+  bash "$MOUNT/slurm/run_training.sh" "${TARGETS[$i]}" "${PLMS[$i]}"
