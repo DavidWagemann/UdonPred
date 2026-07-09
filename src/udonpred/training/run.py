@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import yaml
+from transformers import EarlyStoppingCallback
 from transformers.training_args import TrainingArguments
 
 import wandb
@@ -162,6 +163,15 @@ def train_model(config, datasets, collator):
     training_arguments |= config["config"]["saving"]
     training_arguments["num_train_epochs"] = config["config"]["num_train_epochs"]
 
+    # Keep and reload the best (lowest eval_loss) checkpoint at the end of
+    # training instead of the last one; save_total_limit then keeps the best plus
+    # the most recent. save_safetensors=False matches save_prediction_head, which
+    # writes pytorch_model.bin, so the best model reloads cleanly.
+    training_arguments["load_best_model_at_end"] = True
+    training_arguments["metric_for_best_model"] = "eval_loss"
+    training_arguments["greater_is_better"] = False
+    training_arguments["save_safetensors"] = False
+
     if config["config"]["deepspeed_zero"]:
         training_arguments["deepspeed"] = deepspeed_config
 
@@ -171,6 +181,12 @@ def train_model(config, datasets, collator):
 
     model = model_init(hyperparameters)
 
+    # Stop once eval_loss hasn't improved for `early_stopping` evaluations.
+    callbacks = []
+    patience = config["config"].get("early_stopping")
+    if patience:
+        callbacks.append(EarlyStoppingCallback(early_stopping_patience=patience))
+
     trainer = CustomTrainer(
         config=config,
         model=model,
@@ -178,11 +194,17 @@ def train_model(config, datasets, collator):
         data_collator=collator,
         train_dataset=datasets["train"],
         eval_dataset=datasets["validation"],
+        callbacks=callbacks,
     )
 
     setup_wandb(config, hyperparameters)
 
     trainer.train(resume_from_checkpoint=config["config"]["checkpoint"])
+
+    # load_best_model_at_end has reloaded the best model into memory; persist it
+    # to a stable `best/` dir so ONNX export always targets the best checkpoint
+    # (not the last checkpoint-<step>).
+    trainer.save_model(os.path.join(training_arguments.output_dir, "best"))
 
 
 def run_optimization(config, datasets, collator):

@@ -518,12 +518,17 @@ class CustomTrainer(Trainer):
                 for k, v in merged_metrics.items():
                     wandb.log({k: torch.tensor(v).mean().item()})
 
-        print(
-            "\neval_loss",
-            torch.tensor(merged_metrics["eval_loss"]).mean().item(),
-            end="\n",
+        eval_loss = torch.tensor(merged_metrics["eval_loss"]).mean().item()
+        print("\neval_loss", eval_loss, end="\n")
+
+        metrics = {"eval_loss": eval_loss}
+        # This override skips the base Trainer's own on_evaluate, so fire it here
+        # -- otherwise EarlyStoppingCallback (and any other eval callback) never
+        # sees the metric.
+        self.control = self.callback_handler.on_evaluate(
+            self.args, self.state, self.control, metrics
         )
-        return {"eval_loss": torch.tensor(merged_metrics["eval_loss"]).mean().item()}
+        return metrics
 
     def get_train_dataloader(self):
         """Get training dataloader with optional cluster-based sampling.
