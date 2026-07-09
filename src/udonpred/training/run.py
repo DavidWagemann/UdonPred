@@ -288,8 +288,6 @@ def run(mode: str):
 
     # Optional env overrides so one config can drive several runs (e.g. a Slurm
     # job array sweeping target x embeddings pLM). Kept explicit and few.
-    if os.environ.get("UDONPRED_RUN_NAME"):
-        config["config"]["run_name"] = os.environ["UDONPRED_RUN_NAME"]
     if os.environ.get("UDONPRED_EMBEDDINGS_PLM"):
         config["config"].setdefault("embeddings", {})["plm"] = os.environ[
             "UDONPRED_EMBEDDINGS_PLM"
@@ -304,6 +302,13 @@ def run(mode: str):
             )
         for name in config["data"]:
             config["data"][name]["fraction"] = 1 if name == target else 0
+    # Run name (drives the W&B run name + checkpoint dir): an explicit
+    # UDONPRED_RUN_NAME wins, else derive <target>-<plm> when both are known.
+    plm = config["config"].get("embeddings", {}).get("plm")
+    if os.environ.get("UDONPRED_RUN_NAME"):
+        config["config"]["run_name"] = os.environ["UDONPRED_RUN_NAME"]
+    elif target and plm:
+        config["config"]["run_name"] = f"{target}-{plm}"
 
     # Resolve the hyperparameter file relative to the packaged config dir when it
     # isn't found relative to the cwd, so training runs from any directory.

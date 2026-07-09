@@ -5,8 +5,8 @@ set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/.."
 
 # Optional target + embeddings pLM for this run (passed by train.sbatch's job
-# array). Trains on the single target with that pLM, under a distinct run name /
-# checkpoint dir (checkpoints/<target>-<plm>) and W&B run.
+# array). Trains on the single target with that pLM; run.py derives the run name
+# / checkpoint dir / W&B run as <target>-<plm> from these.
 TARGET="${1:-}"
 PLM="${2:-}"
 if [ -n "$TARGET" ]; then
@@ -14,9 +14,6 @@ if [ -n "$TARGET" ]; then
 fi
 if [ -n "$PLM" ]; then
   export UDONPRED_EMBEDDINGS_PLM="$PLM"
-fi
-if [ -n "$TARGET" ] && [ -n "$PLM" ]; then
-  export UDONPRED_RUN_NAME="$TARGET-$PLM"
 fi
 
 # Node-local scratch. Fixed (not per-job) so the venv + embeddings cache are
