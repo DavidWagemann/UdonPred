@@ -18,11 +18,16 @@ logging:
 # Model saving
 saving:
   save_steps: 10
+  # Cap retained checkpoints so they don't accumulate and fill the (quota'd)
+  # output disk, which slows writes over a long run.
+  save_total_limit: 3
 
 # Weights & Biases integration
 wandb:
   project: UdonPred
-  log_model: checkpoint
+  # "end" uploads only the final model; "checkpoint" would upload one artifact
+  # every save_steps, whose growing sync backlog slows training over time.
+  log_model: end
 
 # Model architecture parameters
 input_dim: 1024

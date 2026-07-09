@@ -412,7 +412,11 @@ class CustomTrainer(Trainer):
 
         metrics = self.calculate_metrics(model_outputs, inputs)
 
-        if self.uses_wandb:
+        # Log training metrics at the configured logging cadence rather than every
+        # step: per-step online wandb.log builds sync backpressure that slows
+        # training as the run grows.
+        log_every = int(self.args.logging_steps) or 1
+        if self.uses_wandb and self.state.global_step % log_every == 0:
             wandb.log(metrics)
 
         loss = (
