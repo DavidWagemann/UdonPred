@@ -11,8 +11,9 @@ from pathlib import Path
 
 from udonpred.datasets import DEFAULT_DATASET_REPO
 
-# trizod2 has a different on-disk layout and is handled separately.
-EXCLUDED_TARGETS = {"trizod2"}
+# Subdirectories to never upload as datasets (none currently). Hidden dirs and
+# dirs without a train.jsonl are skipped automatically by _discover_targets.
+EXCLUDED_TARGETS: set = set()
 SPLITS = ("train", "valid", "test")
 # File split name -> HF split name for the dataset card.
 _CARD_SPLIT = {"train": "train", "valid": "validation", "test": "test"}

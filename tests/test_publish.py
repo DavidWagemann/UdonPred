@@ -5,9 +5,6 @@ pytest.importorskip("huggingface_hub")
 from udonpred.utils import publish
 
 
-EXCLUDED = "trizod2"
-
-
 def _make_target(root, name):
     d = root / name
     d.mkdir(parents=True)
@@ -27,7 +24,10 @@ def test_dataset_card_lists_configs():
 def test_publish_dataset_uploads_files_and_card(tmp_path, monkeypatch):
     data = tmp_path / "split"
     _make_target(data, "trizod")
-    _make_target(data, EXCLUDED)  # must be skipped
+    _make_target(data, "trizod2")  # a normal dataset now
+    # a non-dataset directory (no train.jsonl) must be skipped
+    (data / "notes").mkdir(parents=True)
+    (data / "notes" / "readme.txt").write_text("x")
 
     uploaded = []
 
@@ -45,8 +45,9 @@ def test_publish_dataset_uploads_files_and_card(tmp_path, monkeypatch):
     paths = {p for kind, p, *_ in uploaded if kind == "upload_file"}
     assert "trizod/train.jsonl" in paths
     assert "trizod/valid.fasta" in paths
+    assert "trizod2/train.jsonl" in paths  # trizod2 is included
     assert "README.md" in paths
-    assert not any(p.startswith(f"{EXCLUDED}/") for p in paths)  # excluded
+    assert not any(p.startswith("notes/") for p in paths)  # non-dataset dir skipped
 
 
 def test_publish_embeddings_targets_expected_path(tmp_path, monkeypatch):
