@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Move to the project root (parent of this slurm/ dir) regardless of workdir.
+# Move to the project root (parent of this scripts/ dir) regardless of workdir.
 cd "$(dirname "$(readlink -f "$0")")/.."
 
 # Optional target + embeddings pLM for this run (passed by train.sbatch's job

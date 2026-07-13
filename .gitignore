@@ -30,7 +30,7 @@ htmlcov/
 checkpoints/
 data/*/*
 exported/
-slurm/logs/*.out
+scripts/slurm/logs/*.out
 eval/figures/*
 # ONNX prediction heads now live on the Hub (udonpred/prediction-heads)
 weights/

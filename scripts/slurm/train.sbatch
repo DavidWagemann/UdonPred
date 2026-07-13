@@ -5,8 +5,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=16
 #SBATCH --time=24:00:00
-#SBATCH --output=slurm/logs/%x-%A_%a.out
-#SBATCH --error=slurm/logs/%x-%A_%a.out
+#SBATCH --output=scripts/slurm/logs/%x-%A_%a.out
+#SBATCH --error=scripts/slurm/logs/%x-%A_%a.out
 #SBATCH --array=0-3%1
 
 set -euo pipefail
@@ -16,7 +16,7 @@ PROJECT=/dss/dssfs02/lwp-dss-0001/pn67na/pn67na-dss-0000/ge39reb3/udonpred
 IMAGE=/dss/dssfs02/lwp-dss-0001/pn67na/pn67na-dss-0000/ge39reb3/nvidia+pytorch+23.10-py3.sqsh
 MOUNT=/mnt/udonpred
 
-mkdir -p "$PROJECT/slurm/logs"
+mkdir -p "$PROJECT/scripts/slurm/logs"
 
 # One array task per (target x pLM), trained separately (no dataset mixing):
 # trizod then chezod, each on frustraiseq then prostt5. Sequential via %1 so each
@@ -29,4 +29,4 @@ srun \
   --container-image="$IMAGE" \
   --no-container-mount-home \
   --container-mounts="$PROJECT:$MOUNT" \
-  bash "$MOUNT/slurm/run_training.sh" "${TARGETS[$i]}" "${PLMS[$i]}"
+  bash "$MOUNT/scripts/run_training.sh" "${TARGETS[$i]}" "${PLMS[$i]}"
