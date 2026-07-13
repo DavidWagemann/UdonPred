@@ -10,7 +10,7 @@ import torch
 import yaml
 from torch.utils.data import Dataset
 from tqdm import tqdm
-from transformers import Trainer
+from transformers import Trainer, TrainerCallback
 from transformers.trainer import *
 from peft import PeftModel
 
@@ -56,6 +56,56 @@ def get_object(p):
         obj = obj[name]
 
     return obj
+
+
+class MetricsProgressCallback(TrainerCallback):
+    """A single training progress bar whose postfix carries the latest metrics.
+
+    Replaces HF's default per-log dict dumping: metrics still flow to W&B via
+    ``self.log()``; here they only update one persistent bar's postfix (loss/lr
+    live, validation metrics refreshed each epoch), so the console stays clean.
+    """
+
+    _RENAME = {"learning_rate": "lr"}
+
+    def __init__(self):
+        self._bar = None
+        self._postfix = {}
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        if state.is_world_process_zero:
+            self._bar = tqdm(
+                total=state.max_steps, desc="Training", dynamic_ncols=True
+            )
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if self._bar is not None:
+            self._bar.update(state.global_step - self._bar.n)
+
+    def _merge(self, values):
+        for k, v in (values or {}).items():
+            # Skip non-scalars, the noisy per-step training/* metrics (still in
+            # W&B), and the redundant "epoch" float.
+            if (
+                k == "epoch"
+                or k.startswith("training/")
+                or not isinstance(v, (int, float))
+            ):
+                continue
+            self._postfix[self._RENAME.get(k, k).split("/")[-1]] = round(float(v), 4)
+        if self._bar is not None:
+            self._bar.set_postfix(self._postfix, refresh=True)
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        self._merge(logs)
+
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        self._merge(metrics)
+
+    def on_train_end(self, args, state, control, **kwargs):
+        if self._bar is not None:
+            self._bar.close()
+            self._bar = None
 
 
 class CustomTrainer(Trainer):

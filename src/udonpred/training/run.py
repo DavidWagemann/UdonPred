@@ -6,12 +6,13 @@ from pathlib import Path
 
 import yaml
 from transformers import EarlyStoppingCallback
+from transformers.trainer_callback import PrinterCallback
 from transformers.training_args import TrainingArguments
 
 import wandb
 from .model.build_model import model_init, suggest
 from .model.data import DataCollator, get_datasets
-from .model.trainer import CustomTrainer
+from .model.trainer import CustomTrainer, MetricsProgressCallback
 
 
 # Top-level config/ dir at the repo root (run.py is src/udonpred/training/run.py,
@@ -153,6 +154,9 @@ def train_model(config, datasets, collator):
         if key in inspect.signature(TrainingArguments).parameters
     }
     training_arguments["remove_unused_columns"] = False
+    # Suppress HF's own progress bar / per-log dict dumps; MetricsProgressCallback
+    # (installed below) renders a single bar with the metrics in its postfix.
+    training_arguments["disable_tqdm"] = True
     training_arguments["report_to"] = (
         "wandb" if "wandb" in config["config"].keys() else None
     )
@@ -196,6 +200,11 @@ def train_model(config, datasets, collator):
         eval_dataset=datasets["validation"],
         callbacks=callbacks,
     )
+
+    # With disable_tqdm, HF uses PrinterCallback (which dumps a dict per log).
+    # Swap it for the single-bar postfix renderer.
+    trainer.remove_callback(PrinterCallback)
+    trainer.add_callback(MetricsProgressCallback())
 
     setup_wandb(config, hyperparameters)
 
