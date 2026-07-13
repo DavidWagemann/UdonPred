@@ -14,7 +14,6 @@ from transformers import Trainer
 from transformers.trainer import *
 from peft import PeftModel
 
-import wandb
 from .data import ClusterSampler
 
 logger = logging.get_logger(__name__)
@@ -85,8 +84,6 @@ class CustomTrainer(Trainer):
         self.__init_losses(config["data"])
         self.config = config
         self.args.ignore_data_skip = True
-
-        self.uses_wandb = "wandb" in config["config"].keys()
 
     def __import_from_string(self, import_path: str):
         """Import a class from a dot-notation path.
@@ -410,14 +407,13 @@ class CustomTrainer(Trainer):
         outputs = model(**inputs)
         model_outputs = {k: v for k, v in outputs.items() if k != "loss"}
 
-        metrics = self.calculate_metrics(model_outputs, inputs)
-
-        # Log training metrics at the configured logging cadence rather than every
-        # step: per-step online wandb.log builds sync backpressure that slows
-        # training as the run grows.
+        # Log training metrics through HF's callback stack (self.log ->
+        # WandbCallback) at the logging cadence, so W&B sees a single,
+        # step-aligned stream. Compute them only when we actually log, not on
+        # every step.
         log_every = int(self.args.logging_steps) or 1
-        if self.uses_wandb and self.state.global_step % log_every == 0:
-            wandb.log(metrics)
+        if self.state.global_step % log_every == 0:
+            self.log(self.calculate_metrics(model_outputs, inputs))
 
         loss = (
             self.calculate_loss(model_outputs, inputs)
@@ -505,7 +501,9 @@ class CustomTrainer(Trainer):
 
                 outputs = model(**inputs)
 
-                merged_metrics["eval_loss"].append(self.calculate_loss(outputs, inputs))
+                merged_metrics["eval_loss"].append(
+                    self.calculate_loss(outputs, inputs).item()
+                )
 
                 # outputs = {k: v for k, v in outputs.items() if k != "eval_loss"}
 
@@ -514,13 +512,16 @@ class CustomTrainer(Trainer):
                     merged_metrics[k].append(v)
 
 
-            if self.uses_wandb:
-                for k, v in merged_metrics.items():
-                    wandb.log({k: torch.tensor(v).mean().item()})
-
-        eval_loss = torch.tensor(merged_metrics["eval_loss"]).mean().item()
+        averaged = {
+            k: torch.tensor(v).mean().item() for k, v in merged_metrics.items()
+        }
+        eval_loss = averaged["eval_loss"]
         print("\neval_loss", eval_loss, end="\n")
 
+        # Log eval metrics through HF's callback stack (self.log -> WandbCallback)
+        # for a single, step-aligned W&B stream; on_evaluate still fires below so
+        # EarlyStoppingCallback sees eval_loss.
+        self.log(averaged)
         metrics = {"eval_loss": eval_loss}
         # This override skips the base Trainer's own on_evaluate, so fire it here
         # -- otherwise EarlyStoppingCallback (and any other eval callback) never

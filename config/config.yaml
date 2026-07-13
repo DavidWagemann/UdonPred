@@ -11,13 +11,15 @@ checkpoint: False
 
 # Logging and evaluation
 logging:
-  logging_steps: 5
-  eval_steps: 10
-  eval_strategy: steps
+  logging_steps: 50
+  # Evaluate once per epoch, not every N steps: a full validation pass (plus a
+  # checkpoint, see below) every few steps dominates wall-clock and stalls the
+  # train loop. Must match save_strategy while load_best_model_at_end is set.
+  eval_strategy: epoch
 
 # Model saving
 saving:
-  save_steps: 10
+  save_strategy: epoch
   # Cap retained checkpoints so they don't accumulate and fill the (quota'd)
   # output disk, which slows writes over a long run.
   save_total_limit: 3
