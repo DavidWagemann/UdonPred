@@ -131,6 +131,11 @@ separately in a GPU container, sharing `scripts/run_training.sh` (it runs
   `docker run --gpus`. Overridable env: `IMAGE`, `MOUNT`, `GPUS`, `SCRATCH`,
   `WANDB_MODE`.
 
+The base jsonl datasets are gitignored, so a fresh checkout has an empty
+`data/`. Fetch them from the [`udonpred/datasets`](https://huggingface.co/datasets/udonpred/datasets)
+Hub repo with `scripts/fetch_data.sh` (downloads every target's jsonl+fasta into
+`data/split/`; overridable `REPO`/`DEST`). Run it once before training.
+
 With a **root Docker daemon**, run the project from a **local disk**, not an
 NFS home — a root-squashed NFS mount can't be bind-mounted by the daemon (and
 outputs can't be written back to it). The script fails fast if it detects an
@@ -138,6 +143,7 @@ NFS project. `scripts/docker/stage.sh` copies a working tree onto local scratch
 for you and run from there:
 
 ```bash
+scripts/fetch_data.sh            # download the (gitignored) jsonl datasets into data/split/
 scripts/docker/stage.sh          # rsync repo → /mnt/space/local/UdonPred (DEST= to override)
 cd /mnt/space/local/UdonPred && scripts/docker/train.sh
 # checkpoints land on local disk; copy them back to NFS from your shell afterwards
