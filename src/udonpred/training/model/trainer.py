@@ -493,7 +493,15 @@ class CustomTrainer(Trainer):
 
         merged_metrics = defaultdict(list)
         with torch.no_grad():
-            for inputs in tqdm(eval_dataloader, total=len(eval_dataloader)):  # type: ignore
+            for inputs in tqdm(
+                eval_dataloader,
+                total=len(eval_dataloader),  # type: ignore
+                desc="Evaluating",
+                leave=False,  # collapse the eval bar so the training bar stays put
+                # None => auto-disable off a TTY, so a piped container log doesn't
+                # get one line per eval batch; honour an explicit disable_tqdm too.
+                disable=self.args.disable_tqdm or None,
+            ):
                 observed_batch_size = find_batch_size(inputs)
                 if observed_batch_size is not None:
                     if batch_size is None:
@@ -516,7 +524,6 @@ class CustomTrainer(Trainer):
             k: torch.tensor(v).mean().item() for k, v in merged_metrics.items()
         }
         eval_loss = averaged["eval_loss"]
-        print("\neval_loss", eval_loss, end="\n")
 
         # Log eval metrics through HF's callback stack (self.log -> WandbCallback)
         # for a single, step-aligned W&B stream; on_evaluate still fires below so
