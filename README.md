@@ -118,6 +118,39 @@ Install the training stack with `uv sync --extra training`. UdonPred can be retr
 
 To restrict training (and its validation/test metrics) to longer proteins, set `min_length` in `config/config.yaml` (residues; `0` keeps all, e.g. `50` or `100` to drop short peptides). The same threshold is available when evaluating existing heads: `uv run --extra hub python eval_trizod_heads.py --min-length 50`.
 
+### Multi-target orchestration
+`scripts/` bundles the launchers that train each `(target × pLM)` combination
+separately in a GPU container, sharing `scripts/run_training.sh` (it runs
+`uv sync` + `udonpred-train train` inside whatever container invokes it):
+
+- **Slurm** (`scripts/slurm/train.sbatch`): a job array on the cluster via
+  enroot/pyxis. Submit with `sbatch scripts/slurm/train.sbatch`. Export
+  `WANDB_API_KEY` in your login shell first (the container runs
+  non-interactively, so `~/.netrc` is never read).
+- **Docker** (`scripts/docker/train.sh`): the same matrix, sequentially, via
+  `docker run --gpus`. Overridable env: `IMAGE`, `MOUNT`, `GPUS`, `SCRATCH`,
+  `WANDB_MODE`.
+
+With a **root Docker daemon**, run the project from a **local disk**, not an
+NFS home — a root-squashed NFS mount can't be bind-mounted by the daemon (and
+outputs can't be written back to it). The script fails fast if it detects an
+NFS project. `scripts/docker/stage.sh` copies a working tree onto local scratch
+for you and run from there:
+
+```bash
+scripts/docker/stage.sh          # rsync repo → /mnt/space/local/UdonPred (DEST= to override)
+cd /mnt/space/local/UdonPred && scripts/docker/train.sh
+# checkpoints land on local disk; copy them back to NFS from your shell afterwards
+```
+
+`stage.sh` skips `.git`/`.venv`, the stray root `frustraiseq_embeddings.h5`, and
+the unused `trizod2` embeddings, so only the ~1.3 GB of frustraiseq embeddings
+the matrix needs are copied. The prostt5 embeddings aren't local — they're
+pulled from the Hub into the persistent HF cache under `SCRATCH` on first use.
+
+(A rootless Docker/enroot runtime, which keeps your UID, avoids the NFS issue
+entirely.)
+
 After training is complete, export the checkpoint to ONNX and publish the heads
 to the Hub in one step:
 ```
