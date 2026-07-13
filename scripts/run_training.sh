@@ -50,7 +50,10 @@ uv sync --extra training --extra hub
 # with "WORLD_SIZE expected, but not set". Pin a 1-rank world so the process
 # group initializes cleanly instead. Override these for a real multi-GPU launch.
 export MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
-export MASTER_PORT="${MASTER_PORT:-29500}"
+# Random high port, not a fixed 29500: with Docker --network host the rendezvous
+# port binds on the host, so a fixed port collides with a leftover run or another
+# user on a shared node. Any free port works for this 1-rank group.
+export MASTER_PORT="${MASTER_PORT:-$((20000 + RANDOM % 20000))}"
 export RANK="${RANK:-0}"
 export LOCAL_RANK="${LOCAL_RANK:-0}"
 export WORLD_SIZE="${WORLD_SIZE:-1}"
