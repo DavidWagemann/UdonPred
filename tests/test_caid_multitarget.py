@@ -11,16 +11,10 @@ from udonpred.heads import discover_targets
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
 
-EXPECTED = {
-    "atlas",
-    "chezod",
-    "disprot",
-    "pdbflex",
-    "plddt",
-    "softdis",
-    "trizod",
-    "trizod2",
-}
+# The pinned release (v0.1.0) is the CAID-submission set: seven heads, no
+# trizod2. Opting into v0.2.0 adds trizod2, which has a policy but is not part
+# of the submission.
+EXPECTED = {"atlas", "chezod", "disprot", "pdbflex", "plddt", "softdis", "trizod"}
 
 
 def _run(args, cwd):
