@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
@@ -220,3 +221,64 @@ def test_binary_column_is_unaffected_by_normalization(tmp_path, weights_dir):
     if disordered and ordered:
         # 1e-3 tolerance: the score column is rounded to 3 decimals
         assert min(disordered) >= max(ordered) - 1e-3
+
+
+def test_timings_csv_written_next_to_each_flavors_predictions(tmp_path, weights_dir):
+    seqs = {"P04637": "MKTAYIAKQRQ", "P38398": "GGGCCCDDD"}
+    (tmp_path / "in.fasta").write_text(
+        "".join(f">{h}\n{s}\n" for h, s in seqs.items())
+    )
+    h5py = pytest.importorskip("h5py")
+    with h5py.File(tmp_path / "emb.h5", "w") as f:
+        for h, s in seqs.items():
+            f[h] = np.random.randn(len(s), 1024).astype(np.float32)
+    outdir = tmp_path / "out"
+
+    res = _run(
+        [
+            str(tmp_path / "in.fasta"),
+            str(weights_dir),
+            "--embeddings",
+            str(tmp_path / "emb.h5"),
+            "--target",
+            "trizod",
+            "chezod",
+            "--output",
+            str(outdir),
+            "--device",
+            "cpu",
+        ],
+        cwd=ROOT,
+    )
+    assert res.returncode == 0, res.stderr
+
+    for target in ("trizod", "chezod"):
+        lines = (outdir / target / "timings.csv").read_text().splitlines()
+        assert lines[0].startswith("# Running UdonPred, started ")
+        assert lines[1] == "sequence,milliseconds"
+        # one row per input protein, in input order, alongside its .caid file
+        assert [line.split(",")[0] for line in lines[2:]] == list(seqs)
+        for line in lines[2:]:
+            assert int(line.split(",")[1]) >= 0
+            assert (outdir / target / f"{line.split(',')[0]}.caid").exists()
+
+
+def test_no_timings_csv_when_writing_to_stdout(tmp_path, weights_dir):
+    seq = "MKTAYIAKQR"
+    (tmp_path / "in.fasta").write_text(f">seq1\n{seq}\n")
+    np.save(tmp_path / "emb.npy", np.random.randn(len(seq), 1024).astype(np.float32))
+
+    res = _run(
+        [
+            str(tmp_path / "in.fasta"),
+            str(weights_dir),
+            "--embeddings",
+            str(tmp_path / "emb.npy"),
+            "--device",
+            "cpu",
+        ],
+        cwd=ROOT,
+    )
+    assert res.returncode == 0, res.stderr
+    assert "timings" not in res.stdout
+    assert not list(tmp_path.glob("**/timings.csv"))

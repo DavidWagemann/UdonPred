@@ -14,6 +14,7 @@ on-the-fly embedding loop.
 
 import argparse
 from pathlib import Path
+from time import perf_counter
 
 import torch
 from tqdm import tqdm
@@ -80,10 +81,10 @@ def run_exported(
         print(f"Loading head ({onnx_path}) ...")
         heads[name] = load_head(onnx_path, torch_device, threads=threads)
 
-    writer = CaidWriter(output_path, targets, smooth=smooth, normalize=normalize)
-
     total_batches = count_batches(entries, max_total_seq_len)
-    with torch.inference_mode():
+    with CaidWriter(
+        output_path, targets, smooth=smooth, normalize=normalize
+    ) as writer, torch.inference_mode():
         for batch in tqdm(
             iter_batches(entries, max_total_seq_len), total=total_batches
         ):
@@ -91,14 +92,20 @@ def run_exported(
             seqs = list(seqs)
             max_seq_len = max(len(s) for s in seqs)
 
+            # One tokenize+embed pass serves the whole batch and every head, so
+            # its cost is split per protein and charged to each head's timing.
+            embed_start = perf_counter()
             input_ids, attention_mask = tokenize_batch(tokenizer, seqs, torch_device)
             emb_np = compute_embeddings(
                 backbone, input_ids, attention_mask, max_seq_len
             )
+            embed_ms = (perf_counter() - embed_start) * 1000.0 / len(seqs)
+
             for name, head in heads.items():
                 scores_batch = score_embeddings(head, emb_np)
                 for header, seq, scores in zip(headers, seqs, scores_batch):
-                    writer.write(name, header, seq, scores[: len(seq)])
+                    with writer.timing(name, header, extra_ms=embed_ms):
+                        writer.write(name, header, seq, scores[: len(seq)])
 
 
 def build_parser() -> argparse.ArgumentParser:

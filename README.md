@@ -62,6 +62,27 @@ Filenames come from the FASTA header with path separators, pipes, and whitespace
 `_`, so distinct headers never collide. Without `--output`, all predictions go to stdout
 instead, prefixed by a `# target: <name>` line when more than one head is running.
 
+#### Timings
+
+Every flavor directory also gets a `timings.csv` recording how long that head took per
+protein:
+
+```
+out/chezod/timings.csv
+    # Running UdonPred, started Sun Feb  5 10:20:57 CET 2023
+    sequence,milliseconds
+    P04637,1827
+```
+
+The measured interval covers the per-protein work only — embedding alignment (or, for
+`udonpred-predict`, tokenization and the ProstT5 forward pass), ONNX scoring, smoothing,
+binarization, and writing the `.caid` file. One-time setup (reading the FASTA, loading the
+heads and backbone, opening the embedding file) is excluded. Embedding preparation is done
+once per protein and shared across heads, so each head is charged for it — running one flavor
+alone would still pay that cost. Protein names come from the FASTA header, quoted if they
+contain a comma. Nothing is written when predictions go to stdout, since there is no
+directory to put the file in.
+
 #### Score Normalization and Binarization
 
 CAID expects a score in `[0, 1]` where **higher means more disordered**, plus a binary

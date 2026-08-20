@@ -64,7 +64,7 @@ def test_on_the_fly_runner_writes_the_caid_layout(
     out = tmp_path / "out"
     # same layout as the CAID runner: {target}/{protein}.caid
     for target in ("trizod", "chezod"):
-        assert sorted(p.name for p in (out / target).iterdir()) == [
+        assert sorted(p.name for p in (out / target).glob("*.caid")) == [
             "P04637.caid",
             "sp_P38398_X.caid",
         ]
@@ -95,3 +95,33 @@ def test_on_the_fly_runner_rejects_head_without_policy(
             output_path=str(tmp_path / "out"),
             device="cpu",
         )
+
+
+def test_on_the_fly_runner_writes_timings_per_flavor(
+    tmp_path, weights_dir, predict_module, monkeypatch
+):
+    entries = [("P04637", "MKTAYIAKQRQ"), ("P38398", "GGGCCCDDD")]
+    seqs = [s for _, s in entries]
+    monkeypatch.setattr(
+        predict_module,
+        "compute_embeddings",
+        lambda *a, **k: _fake_embeddings(seqs),
+    )
+
+    predict_module.run_exported(
+        entries,
+        str(weights_dir),
+        ["trizod", "plddt"],
+        max_total_seq_len=2000,
+        output_path=str(tmp_path / "out"),
+        device="cpu",
+        smooth=1.5,
+    )
+
+    for target in ("trizod", "plddt"):
+        lines = (tmp_path / "out" / target / "timings.csv").read_text().splitlines()
+        assert lines[0].startswith("# Running UdonPred, started ")
+        assert lines[1] == "sequence,milliseconds"
+        assert [line.split(",")[0] for line in lines[2:]] == ["P04637", "P38398"]
+        for line in lines[2:]:
+            assert int(line.split(",")[1]) >= 0

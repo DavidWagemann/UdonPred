@@ -125,7 +125,7 @@ def test_each_protein_gets_its_own_file(tmp_path, weights_dir):
     assert res.returncode == 0, res.stderr
     for target in ("trizod", "disprot"):
         # one file per protein, each holding only its own protein
-        assert sorted(p.name for p in (outdir / target).iterdir()) == [
+        assert sorted(p.name for p in (outdir / target).glob("*.caid")) == [
             "seq1.caid",
             "seq2.caid",
         ]

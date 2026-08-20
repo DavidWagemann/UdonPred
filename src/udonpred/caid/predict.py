@@ -24,6 +24,7 @@ Example::
 """
 
 import argparse
+from time import perf_counter
 
 from udonpred.cli import common_parser
 from udonpred.datasets import resolve_embeddings_ref
@@ -77,15 +78,21 @@ def run(
         for name in targets
     }
 
-    writer = CaidWriter(output_path, targets, smooth=smooth, normalize=normalize)
+    # The embedding is aligned once per sequence and reused across every head,
+    # so its cost is charged to each head's timing (see CaidWriter.timing).
+    with CaidWriter(
+        output_path, targets, smooth=smooth, normalize=normalize
+    ) as writer:
+        for index, (header, seq) in enumerate(entries):
+            align_start = perf_counter()
+            emb = align_embedding(source.get(header, index), len(seq))
+            batched = emb[None, ...]
+            align_ms = (perf_counter() - align_start) * 1000.0
 
-    # The embedding is aligned once per sequence and reused across every head.
-    for index, (header, seq) in enumerate(entries):
-        emb = align_embedding(source.get(header, index), len(seq))
-        batched = emb[None, ...]
-        for name, head in heads.items():
-            scores_seq = score_embeddings(head, batched)[0][: len(seq)]
-            writer.write(name, header, seq, scores_seq)
+            for name, head in heads.items():
+                with writer.timing(name, header, extra_ms=align_ms):
+                    scores_seq = score_embeddings(head, batched)[0][: len(seq)]
+                    writer.write(name, header, seq, scores_seq)
 
 
 def build_parser() -> argparse.ArgumentParser:

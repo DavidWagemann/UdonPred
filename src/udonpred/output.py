@@ -7,13 +7,32 @@ CAID artefacts, so that chain lives here rather than in either runner. Nothing
 in this module imports ``torch``, keeping the lean CAID import boundary intact.
 """
 
+import csv
 import sys
+import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
 
 from udonpred.fasta import format_predictions, safe_filename
 from udonpred.inference import binarize_scores, normalize_scores, smooth_scores
+
+# Name reported in the timings.csv banner.
+PREDICTOR_NAME = "UdonPred"
+
+
+def format_started(timestamp: float) -> str:
+    """Format a run's start time the way the CAID timings banner expects.
+
+    ``Sun Feb  5 10:20:57 CET 2023`` -- the day of month is space-padded, which
+    ``%e`` would give on glibc but not portably, so it is built explicitly.
+    """
+    local = time.localtime(timestamp)
+    return (
+        f"{time.strftime('%a %b', local)} {local.tm_mday:>2} "
+        f"{time.strftime('%H:%M:%S %Z %Y', local)}"
+    )
 
 
 def postprocess_scores(
@@ -48,6 +67,12 @@ class CaidWriter:
 
     Smoothing and normalization are run-wide settings, so they are fixed here
     once and applied to every :meth:`write` call.
+
+    Each flavor directory also gets a ``timings.csv`` recording how long that
+    head took per protein, written on :meth:`close` (so use this as a context
+    manager). Timings are collected by wrapping the per-protein work in
+    :meth:`timing`; nothing is written in stdout mode, which has no directories
+    to put the file in.
     """
 
     def __init__(
@@ -60,6 +85,8 @@ class CaidWriter:
         self.smooth = smooth
         self.normalize = normalize
         self._multi = len(targets) > 1
+        self._started = time.time()
+        self._timings: dict[str, list[tuple[str, float]]] = {n: [] for n in targets}
         self._dirs: dict[str, Path] | None = None
         if output_path:
             self._dirs = {}
@@ -88,3 +115,41 @@ class CaidWriter:
         out_file = self._dirs[target] / f"{safe_filename(header)}.caid"
         with out_file.open("w") as handle:
             handle.writelines(lines)
+
+    @contextmanager
+    def timing(self, target: str, header: str, extra_ms: float = 0.0):
+        """Record how long the wrapped per-protein work took for one head.
+
+        Args:
+            target: The head the work belongs to.
+            header: The protein, as it appears in the FASTA.
+            extra_ms: Milliseconds of shared preparation to attribute to this
+                head -- embedding alignment (or computation) is done once per
+                protein and reused across heads, but a run of this head alone
+                would still have paid it, so each head is charged for it.
+        """
+        start = time.perf_counter()
+        try:
+            yield
+        finally:
+            elapsed_ms = (time.perf_counter() - start) * 1000.0
+            self._timings[target].append((header, elapsed_ms + extra_ms))
+
+    def close(self) -> None:
+        """Write each flavor's ``timings.csv``. No-op when writing to stdout."""
+        if self._dirs is None:
+            return
+        banner = f"# Running {PREDICTOR_NAME}, started {format_started(self._started)}"
+        for target, directory in self._dirs.items():
+            with (directory / "timings.csv").open("w", newline="") as handle:
+                handle.write(f"{banner}\n")
+                writer = csv.writer(handle)
+                writer.writerow(["sequence", "milliseconds"])
+                for header, elapsed_ms in self._timings[target]:
+                    writer.writerow([header, round(elapsed_ms)])
+
+    def __enter__(self) -> "CaidWriter":
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self.close()
