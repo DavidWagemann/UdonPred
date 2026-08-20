@@ -1,4 +1,9 @@
-from udonpred.fasta import read_fasta, sanitize_sequence, format_predictions
+from udonpred.fasta import (
+    format_predictions,
+    read_fasta,
+    safe_filename,
+    sanitize_sequence,
+)
 
 
 def test_read_fasta_multi_entry(tmp_path):
@@ -26,3 +31,21 @@ def test_format_predictions_emits_caid_rows():
     assert lines[0] == ">hdr\n"
     assert lines[1] == "1\tM\t0.100\t\n"
     assert lines[2] == "2\tK\t0.920\t\n"
+
+
+def test_format_predictions_emits_binary_column():
+    lines = format_predictions("hdr", "MK", [0.1, 0.92], [0, 1])
+    assert lines[1] == "1\tM\t0.100\t0\n"
+    assert lines[2] == "2\tK\t0.920\t1\n"
+
+
+def test_format_predictions_unwraps_trailing_axis_in_both_columns():
+    # heads emit (L, 1); binarize_scores preserves that shape
+    lines = format_predictions("hdr", "M", [[0.42]], [[1]])
+    assert lines[1] == "1\tM\t0.420\t1\n"
+
+
+def test_safe_filename_replaces_path_unsafe_characters():
+    assert safe_filename("sp|P04637|P53_HUMAN") == "sp_P04637_P53_HUMAN"
+    assert safe_filename("P04637 cellular tumor antigen") == "P04637_cellular_tumor_antigen"
+    assert safe_filename("a/b") == "a_b"

@@ -33,4 +33,5 @@ def test_run_resolves_hub_embeddings_reference(tmp_path, monkeypatch, weights_di
     )
 
     assert seen["source"] == "udonpred/datasets:trizod/embeddings/prostt5/test.h5"
-    assert (tmp_path / "out" / "udonpred_trizod.caid").read_text().startswith(">seq1\n")
+    out_file = tmp_path / "out" / "trizod" / "seq1.caid"
+    assert out_file.read_text().startswith(">seq1\n")

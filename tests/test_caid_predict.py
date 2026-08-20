@@ -45,13 +45,17 @@ def test_caid_predict_npy_single_sequence_to_stdout(tmp_path, weights_dir):
     assert lines[0] == ">seq1"
     # one row per residue
     assert len(lines) == 1 + len(seq)
-    # rows: idx \t residue \t score
+    # rows: idx \t residue \t score \t binary
     first = lines[1].split("\t")
+    assert len(first) == 4
     assert first[0] == "1" and first[1] == "M"
     assert 0.0 <= float(first[2]) <= 1.0
+    assert first[3] in ("0", "1")
 
 
-def test_caid_predict_writes_one_file_per_head(tmp_path, weights_dir):
+def test_caid_predict_writes_one_dir_per_head_one_file_per_protein(
+    tmp_path, weights_dir
+):
     seq = "MKTAYIAKQR"
     (tmp_path / "in.fasta").write_text(f">seq1\n{seq}\n")
     np.save(tmp_path / "emb.npy", np.random.randn(len(seq), 1024).astype(np.float32))
@@ -71,8 +75,8 @@ def test_caid_predict_writes_one_file_per_head(tmp_path, weights_dir):
         cwd=ROOT,
     )
     assert res.returncode == 0, res.stderr
-    # file is named after the prediction head, not the sequence
-    out_file = outdir / "udonpred_trizod.caid"
+    # CAID layout: {target}/{protein}.caid
+    out_file = outdir / "trizod" / "seq1.caid"
     assert out_file.exists()
     assert out_file.read_text().startswith(">seq1\n")
 
@@ -103,7 +107,7 @@ def _run_target(tmp_path, weights_dir, target, outdir, *extra):
         cwd=ROOT,
     )
     assert res.returncode == 0, res.stderr
-    return _scores(outdir / f"udonpred_{target}.caid")
+    return _scores(outdir / target / "seq1.caid")
 
 
 def test_normalize_bounds_and_flips_chezod(tmp_path, weights_dir):
@@ -158,4 +162,61 @@ def test_normalize_rejects_head_without_policy(tmp_path, weights_dir):
     )
     assert res.returncode != 0
     # fails on the policy check, before trying to load the (invalid) head
-    assert "--normalize has no policy for: bogus" in res.stderr
+    assert "No policy registered for: bogus" in res.stderr
+
+
+def _rows(path):
+    return [
+        line.split("\t")
+        for line in path.read_text().splitlines()
+        if line.strip() and not line.startswith(">")
+    ]
+
+
+def test_binary_column_matches_raw_threshold(tmp_path, weights_dir):
+    seq = "MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQAPILSRVGDGTQDNLSGAEKAVQVKVKALPDAQ"
+    (tmp_path / "in.fasta").write_text(f">seq1\n{seq}\n")
+    np.save(tmp_path / "emb.npy", np.random.randn(len(seq), 1024).astype(np.float32))
+
+    for target, threshold, order_positive in [
+        ("trizod", 0.4, False),
+        ("chezod", 3.0, True),
+        ("plddt", 68.8, True),
+        ("atlas", 2.0, False),
+    ]:
+        outdir = tmp_path / f"raw_{target}"
+        _run_target(tmp_path, weights_dir, target, outdir, "--no-normalize")
+        rows = _rows(outdir / target / "seq1.caid")
+        assert len(rows) == len(seq)
+        checked = 0
+        for row in rows:
+            assert len(row) == 4, row
+            raw, call = float(row[2]), row[3]
+            # the score column is rounded to 3 decimals, so a raw value within
+            # half a step of the cutoff can land on either side of it
+            if abs(raw - threshold) <= 5e-4:
+                continue
+            expected = raw < threshold if order_positive else raw >= threshold
+            assert call == str(int(expected)), (target, row)
+            checked += 1
+        assert checked, f"no unambiguous rows to check for {target}"
+
+
+def test_binary_column_is_unaffected_by_normalization(tmp_path, weights_dir):
+    seq = "MKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQ"
+    (tmp_path / "in.fasta").write_text(f">seq1\n{seq}\n")
+    np.save(tmp_path / "emb.npy", np.random.randn(len(seq), 1024).astype(np.float32))
+
+    _run_target(tmp_path, weights_dir, "chezod", tmp_path / "norm")
+    _run_target(tmp_path, weights_dir, "chezod", tmp_path / "raw", "--no-normalize")
+
+    normalized = [r[3] for r in _rows(tmp_path / "norm" / "chezod" / "seq1.caid")]
+    raw = [r[3] for r in _rows(tmp_path / "raw" / "chezod" / "seq1.caid")]
+    assert normalized == raw
+    # a normalized disorder call must sit at the high end of the score column
+    scores = [float(r[2]) for r in _rows(tmp_path / "norm" / "chezod" / "seq1.caid")]
+    disordered = [s for s, c in zip(scores, normalized) if c == "1"]
+    ordered = [s for s, c in zip(scores, normalized) if c == "0"]
+    if disordered and ordered:
+        # 1e-3 tolerance: the score column is rounded to 3 decimals
+        assert min(disordered) >= max(ordered) - 1e-3

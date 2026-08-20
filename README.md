@@ -46,32 +46,49 @@ Options:
 - `--normalize` / `--no-normalize` — map scores onto the CAID convention
   (default: enabled). See below.
 
-**Output:** one CAID file **per prediction head**, named `udonpred_<target>.caid`, each
-holding the predictions for **all** input proteins concatenated, written flat into the
-output directory (e.g. `out/udonpred_trizod.caid`, `out/udonpred_disprot.caid`).
+**Output:** one directory **per prediction head** (the CAID "flavor"), holding one file
+**per protein** — `<output>/<target>/<protein>.caid`. Each row is
+`<index>\t<residue>\t<score>\t<binary>`:
 
-#### Score Normalization
+```
+out/chezod/P04637.caid
+    >P04637
+    1	M	0.892	1
+    2	E	0.813	1
+    ...
+```
 
-CAID expects per-residue scores in `[0, 1]` where **higher means more disordered**, but the
-heads do not all natively produce that: four end in a sigmoid, while the rest are unbounded
-regressions on their target's own scale — and `chezod`/`plddt` run the *other* way (higher =
-more ordered). `--normalize` (on by default) reconciles this, clamping each head to its fixed
-a-priori scale, rescaling onto `[0, 1]`, and flipping where needed:
+Filenames come from the FASTA header with path separators, pipes, and whitespace replaced by
+`_`, so distinct headers never collide. Without `--output`, all predictions go to stdout
+instead, prefixed by a `# target: <name>` line when more than one head is running.
 
-| head | raw output | higher means | applied transform |
-| --- | --- | --- | --- |
-| `trizod`, `disprot`, `softdis` | `[0, 1]` (sigmoid) | disorder | none (passed through) |
-| `chezod` | CheZOD Z-score, unbounded | order | `1 - (clamp(x, -5, 16.15) + 5) / 21.15` |
-| `plddt` | pLDDT, unbounded | order | `1 - clamp(x, 0, 100) / 100` |
-| `pdbflex` | Å RMSD, unbounded | disorder | `clamp(x, 0, 10) / 10` |
-| `atlas` | Å RMSF, unbounded | disorder | `clamp(x, 0, 10) / 10` |
+#### Score Normalization and Binarization
 
-Bounds are fixed rather than derived from the input's observed min/max, so a residue's score
-does not depend on which other proteins were in the same run. Smoothing is applied first, on
-the raw scale. Pass `--no-normalize` to get raw head output — useful for regression analysis,
-but not CAID-compliant. The policy table lives in
-[`src/udonpred/inference.py`](src/udonpred/inference.py) (`TARGET_NORMALIZATION`); a head with
-no entry there is rejected up front unless `--no-normalize` is given.
+CAID expects a score in `[0, 1]` where **higher means more disordered**, plus a binary
+disorder call. The heads do not natively produce either: four end in a sigmoid, while the rest
+are unbounded regressions on their target's own scale — and `chezod`/`plddt` run the *other*
+way (higher = more ordered). Both columns are derived from one per-head policy table,
+`TARGET_POLICIES` in [`src/udonpred/inference.py`](src/udonpred/inference.py):
+
+| head | raw output | higher means | score transform | disordered when |
+| --- | --- | --- | --- | --- |
+| `trizod`, `trizod2` | `[0, 1]` (sigmoid) | disorder | none | `x ≥ 0.4` |
+| `disprot` | `[0, 1]` (sigmoid) | disorder | none | `x ≥ 0.5` |
+| `softdis` | `[0, 1]` (sigmoid) | disorder | none | `x ≥ 0.025` |
+| `chezod` | Z-score, unbounded | order | `1 - (clamp(x, -5, 16.15) + 5) / 21.15` | `x < 3` |
+| `plddt` | pLDDT, unbounded | order | `1 - clamp(x, 0, 100) / 100` | `x < 68.8` |
+| `pdbflex` | Å RMSD, unbounded | disorder | `clamp(x, 0, 10) / 10` | `x ≥ 2` |
+| `atlas` | Å RMSF, unbounded | disorder | `clamp(x, 0, 10) / 10` | `x ≥ 2` |
+
+Thresholds are stated in each head's **raw** units, so they stay readable against the
+literature cutoffs and the binary column is identical with or without `--normalize`. Order is:
+smooth on the raw scale → read off the binary calls → rescale the score column.
+
+Score bounds are fixed rather than derived from the input's observed min/max, so a residue's
+score does not depend on which other proteins were in the same run. Pass `--no-normalize` to
+keep raw scores in the third column — useful for regression analysis, but not CAID-compliant.
+A head with no entry in the table is rejected up front, since its threshold is needed either
+way.
 
 #### How to Generate Embeddings
 **Important note:** The CAID4 predictor (`udonpred-caid`, i.e. `udonpred.caid.predict`) does **not** run the protein language

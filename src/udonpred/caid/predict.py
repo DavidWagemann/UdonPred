@@ -6,15 +6,16 @@ ProstT5 protein language model. Per-residue embeddings are supplied externally
 generate them) and only the small ONNX prediction heads are run, on CPU by
 default.
 
-Each prediction head writes a single ``udonpred_{target}.caid`` file containing all
-input proteins concatenated; with ``--target all`` every head's file lands flat
-in the same output directory.
+Output follows the CAID layout: one directory per prediction head ("flavor"),
+holding one file per protein — ``{output}/{target}/{protein}.caid``. Each row is
+``<index>\\t<residue>\\t<score>\\t<binary>``.
 
-By default (``--normalize``) scores are mapped onto the CAID convention — ``[0, 1]``
-where higher means more disordered — which flips the ``chezod`` and ``plddt``
-heads and rescales every non-sigmoid head by its fixed scale (see
-``udonpred.inference.TARGET_NORMALIZATION``). Pass ``--no-normalize`` for raw
-head output.
+Both output conventions come from ``udonpred.inference.TARGET_POLICIES``: the
+binary column thresholds each head on its own raw scale, and by default
+(``--normalize``) the score column is mapped onto ``[0, 1]`` with higher meaning
+more disordered, which flips the ``chezod`` and ``plddt`` heads and rescales
+every non-sigmoid head. Pass ``--no-normalize`` to keep raw scores; the binary
+column is unaffected either way.
 
 Example::
 
@@ -27,18 +28,19 @@ import sys
 from pathlib import Path
 
 from udonpred.datasets import resolve_embeddings_ref
-from udonpred.fasta import format_predictions, read_fasta
+from udonpred.fasta import format_predictions, read_fasta, safe_filename
 from udonpred.heads import (
     DEFAULT_HEADS_REPO,
     DEFAULT_HEADS_REVISION,
     resolve_model_dir,
 )
 from udonpred.inference import (
+    binarize_scores,
     load_head,
     normalize_scores,
     score_embeddings,
     smooth_scores,
-    unknown_normalization_targets,
+    unknown_targets,
 )
 
 from udonpred.caid.embeddings import align_embedding, load_precomputed_embeddings
@@ -91,14 +93,14 @@ def run(
     multi = len(targets) > 1
 
     # Fail before loading any head or embedding file if a requested head has no
-    # registered normalization policy.
-    if normalize:
-        unknown = unknown_normalization_targets(targets)
-        if unknown:
-            raise ValueError(
-                f"--normalize has no policy for: {', '.join(unknown)}. Add it to "
-                "udonpred.inference.TARGET_NORMALIZATION or pass --no-normalize."
-            )
+    # registered policy — its threshold is needed for the binary column, and its
+    # scale for --normalize.
+    unknown = unknown_targets(targets)
+    if unknown:
+        raise ValueError(
+            f"No policy registered for: {', '.join(unknown)}. Add it to "
+            "udonpred.inference.TARGET_POLICIES."
+        )
 
     # `embeddings` may be a local .h5/.npy path or a Hub reference
     # (repo_id:path_in_repo[@revision]).
@@ -110,37 +112,37 @@ def run(
         for name in targets
     }
 
-    # One CAID file per prediction head, holding all proteins concatenated, all
-    # written flat into the output directory (udonpred_{target}.caid). Open every head's
-    # file once so each sequence's embedding is aligned a single time and reused.
-    out_files = None
+    # CAID layout: one directory per prediction head ("flavor"), holding one
+    # file per protein ({target}/{protein}.caid). The embedding is aligned once
+    # per sequence and reused across every head.
+    out_dirs = None
     if output_path:
-        out_dir = Path(output_path)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_files = {name: (out_dir / f"udonpred_{name}.caid").open("w") for name in targets}
+        out_dirs = {}
+        for name in targets:
+            out_dirs[name] = Path(output_path) / name
+            out_dirs[name].mkdir(parents=True, exist_ok=True)
 
-    try:
-        for index, (header, seq) in enumerate(entries):
-            emb = align_embedding(source.get(header, index), len(seq))
-            batched = emb[None, ...]
-            for name, head in heads.items():
-                scores_seq = score_embeddings(head, batched)[0][: len(seq)]
-                # Smooth on the raw scale, then map onto the CAID convention.
-                scores_seq = smooth_scores(scores_seq, smooth)
-                if normalize:
-                    scores_seq = normalize_scores(scores_seq, name)
-                formatted_lines = format_predictions(header, seq, scores_seq)
+    for index, (header, seq) in enumerate(entries):
+        emb = align_embedding(source.get(header, index), len(seq))
+        batched = emb[None, ...]
+        for name, head in heads.items():
+            scores_seq = score_embeddings(head, batched)[0][: len(seq)]
+            # Smooth on the raw scale, then read off the binary calls (whose
+            # thresholds are in raw units) before rescaling the scores.
+            scores_seq = smooth_scores(scores_seq, smooth)
+            binary_seq = binarize_scores(scores_seq, name)
+            if normalize:
+                scores_seq = normalize_scores(scores_seq, name)
+            formatted_lines = format_predictions(header, seq, scores_seq, binary_seq)
 
-                if out_files is not None:
-                    out_files[name].writelines(formatted_lines)
-                else:
-                    if multi:
-                        sys.stdout.write(f"# target: {name}\n")
-                    sys.stdout.writelines(formatted_lines)
-    finally:
-        if out_files is not None:
-            for handle in out_files.values():
-                handle.close()
+            if out_dirs is not None:
+                out_file = out_dirs[name] / f"{safe_filename(header)}.caid"
+                with out_file.open("w") as handle:
+                    handle.writelines(formatted_lines)
+            else:
+                if multi:
+                    sys.stdout.write(f"# target: {name}\n")
+                sys.stdout.writelines(formatted_lines)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -186,16 +188,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="One or more prediction types, each matching a {target}.onnx file "
         "in model_dir (trizod, chezod, softdis, pdbflex, atlas, plddt, "
         "disprot). Use 'all' to run every head in model_dir. Each head writes "
-        "one udonpred_{target}.caid file (all proteins concatenated) into the output "
-        "directory. Default: trizod.",
+        "its own {target}/ subdirectory of the output directory. Default: trizod.",
     )
     parser.add_argument(
         "--output",
         "-o",
         type=str,
         default=None,
-        help="Output directory. Each head writes one udonpred_<target>.caid file with "
-        "all proteins concatenated. Writes to stdout if unset.",
+        help="Output directory. Each head gets a {target}/ subdirectory holding "
+        "one {protein}.caid file per input protein. Writes to stdout if unset.",
     )
     parser.add_argument(
         "--device",
@@ -227,8 +228,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=True,
         help="Map scores onto the CAID convention — [0, 1] where higher means "
         "more disordered: flip chezod/plddt and rescale every non-sigmoid head "
-        "by its fixed scale. Use --no-normalize for raw head output "
-        "(default: enabled).",
+        "by its fixed scale. Does not affect the binary column. Use "
+        "--no-normalize for raw head output (default: enabled).",
     )
     return parser
 

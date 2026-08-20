@@ -7,26 +7,47 @@ precomputed-embedding runner.
 
 from collections.abc import Iterable
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 import onnxruntime as ort
 from scipy.ndimage import gaussian_filter1d
 
-# Per-head policy for mapping raw head output onto the CAID convention: scores
-# in [0, 1] where higher means more disordered. ``None`` means the head already
-# emits a sigmoid probability with disorder-positive polarity, so its output is
-# passed through untouched. Otherwise ``(lo, hi, flip)`` clamps to ``[lo, hi]``,
-# rescales onto [0, 1], and inverts if ``flip`` (i.e. the head's raw scale runs
-# the other way, higher = more ordered).
-TARGET_NORMALIZATION: dict[str, tuple[float, float, bool] | None] = {
-    "trizod": None,
-    "trizod2": None,  # same sigmoid head family as trizod
-    "disprot": None,
-    "softdis": None,
-    "chezod": (-5.0, 16.15, True),  # CheZOD Z-score; higher = more ordered
-    "plddt": (0.0, 100.0, True),  # pLDDT; higher = more confident/ordered
-    "pdbflex": (0.0, 10.0, False),  # Angstrom RMSD
-    "atlas": (0.0, 10.0, False),  # Angstrom RMSF
+
+class TargetPolicy(NamedTuple):
+    """How one head's raw output maps onto the two CAID output conventions.
+
+    Attributes:
+        scale: ``(lo, hi)`` bounds of the head's raw scale, used to clamp and
+            rescale onto ``[0, 1]``. ``None`` for heads that already emit a
+            sigmoid probability, whose output is passed through untouched.
+        flip: Whether the raw scale runs the other way (higher = more
+            *ordered*), so both the score and the binary call must be inverted.
+        threshold: Disorder cutoff **on the raw scale**. A residue is called
+            disordered when its raw score is ``< threshold`` for a flipped head,
+            and ``>= threshold`` otherwise.
+    """
+
+    scale: tuple[float, float] | None
+    flip: bool
+    threshold: float
+
+
+# Per-head policy for the two CAID conventions: scores in [0, 1] where higher
+# means more disordered, plus a binary disorder call. Thresholds are expressed
+# in each head's own raw units, so they stay readable against the literature
+# cutoffs and apply with or without --normalize.
+TARGET_POLICIES: dict[str, TargetPolicy] = {
+    # Sigmoid heads: already [0, 1] and disorder-positive.
+    "trizod": TargetPolicy(None, False, 0.4),
+    "trizod2": TargetPolicy(None, False, 0.4),  # same head family as trizod
+    "disprot": TargetPolicy(None, False, 0.5),  # probability of a binary label
+    "softdis": TargetPolicy(None, False, 0.025),
+    # Unbounded regression heads.
+    "chezod": TargetPolicy((-5.0, 16.15), True, 3.0),  # Z-score; higher = ordered
+    "plddt": TargetPolicy((0.0, 100.0), True, 68.8),  # pLDDT; higher = ordered
+    "pdbflex": TargetPolicy((0.0, 10.0), False, 2.0),  # Angstrom RMSD
+    "atlas": TargetPolicy((0.0, 10.0), False, 2.0),  # Angstrom RMSF
 }
 
 
@@ -89,30 +110,50 @@ def smooth_scores(scores: np.ndarray, sigma: float) -> np.ndarray:
     )
 
 
-def unknown_normalization_targets(targets: Iterable[str]) -> list[str]:
-    """Return the requested target names that have no normalization policy."""
-    return [name for name in targets if name not in TARGET_NORMALIZATION]
+def unknown_targets(targets: Iterable[str]) -> list[str]:
+    """Return the requested target names that have no registered policy."""
+    return [name for name in targets if name not in TARGET_POLICIES]
+
+
+def target_policy(target: str) -> TargetPolicy:
+    """Look up a head's policy, with a helpful error for unregistered heads."""
+    try:
+        return TARGET_POLICIES[target]
+    except KeyError:
+        raise ValueError(
+            f"No policy registered for target {target!r}. Known targets: "
+            f"{', '.join(sorted(TARGET_POLICIES))}."
+        ) from None
 
 
 def normalize_scores(scores: np.ndarray, target: str) -> np.ndarray:
     """Map raw head output onto the CAID convention: [0, 1], higher = disorder.
 
-    Heads that already emit a sigmoid probability (see ``TARGET_NORMALIZATION``)
-    are returned unchanged. The rest are clamped to their fixed a-priori scale,
+    Heads that already emit a sigmoid probability (see ``TARGET_POLICIES``) are
+    returned unchanged. The rest are clamped to their fixed a-priori scale,
     rescaled onto [0, 1], and inverted if their scale runs the other way
     (``chezod``, ``plddt``). The input shape is preserved.
     """
-    if target not in TARGET_NORMALIZATION:
-        raise ValueError(
-            f"No normalization policy for target {target!r}. Known targets: "
-            f"{', '.join(sorted(TARGET_NORMALIZATION))}."
-        )
-    policy = TARGET_NORMALIZATION[target]
-    if policy is None:
+    policy = target_policy(target)
+    if policy.scale is None:
         return scores
-    lo, hi, flip = policy
+    lo, hi = policy.scale
     out = (np.clip(np.asarray(scores, dtype=np.float64), lo, hi) - lo) / (hi - lo)
-    return 1.0 - out if flip else out
+    return 1.0 - out if policy.flip else out
+
+
+def binarize_scores(scores: np.ndarray, target: str) -> np.ndarray:
+    """Call each residue disordered (1) or ordered (0) from **raw** scores.
+
+    The threshold lives on the head's raw scale, so this must be applied to the
+    scores as the head emits them — before :func:`normalize_scores`. Flipped
+    heads (``chezod``, ``plddt``) are order-positive, so for them disorder is
+    *below* the cutoff. The input shape is preserved.
+    """
+    policy = target_policy(target)
+    raw = np.asarray(scores, dtype=np.float64)
+    calls = raw < policy.threshold if policy.flip else raw >= policy.threshold
+    return calls.astype(np.int8)
 
 
 def iter_batches(items: list[tuple[str, str]], max_total_len: int):

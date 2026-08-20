@@ -11,7 +11,16 @@ from udonpred.caid.predict import discover_targets
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"
 
-EXPECTED = {"atlas", "chezod", "disprot", "pdbflex", "plddt", "softdis", "trizod"}
+EXPECTED = {
+    "atlas",
+    "chezod",
+    "disprot",
+    "pdbflex",
+    "plddt",
+    "softdis",
+    "trizod",
+    "trizod2",
+}
 
 
 def _run(args, cwd):
@@ -29,7 +38,7 @@ def test_discover_targets_finds_all_onnx_stems(weights_dir):
     assert set(discover_targets(weights_dir)) == EXPECTED
 
 
-def test_all_targets_writes_one_file_per_head_same_dir(tmp_path, weights_dir):
+def test_all_targets_writes_one_dir_per_head(tmp_path, weights_dir):
     seq = "MKTAYIAKQR"
     (tmp_path / "in.fasta").write_text(f">seq1\n{seq}\n")
     np.save(tmp_path / "emb.npy", np.random.randn(len(seq), 1024).astype(np.float32))
@@ -51,13 +60,11 @@ def test_all_targets_writes_one_file_per_head_same_dir(tmp_path, weights_dir):
         cwd=ROOT,
     )
     assert res.returncode == 0, res.stderr
-    # one file per head, all in the same flat output directory
+    # one directory per head, each holding one file per protein
     for target in EXPECTED:
-        f = outdir / f"udonpred_{target}.caid"
+        f = outdir / target / "seq1.caid"
         assert f.exists(), f"missing {f}"
         assert f.read_text().startswith(">seq1\n")
-    # no per-target subdirectories
-    assert not any(p.is_dir() for p in outdir.iterdir())
 
 
 def test_explicit_multiple_targets(tmp_path, weights_dir):
@@ -83,12 +90,12 @@ def test_explicit_multiple_targets(tmp_path, weights_dir):
         cwd=ROOT,
     )
     assert res.returncode == 0, res.stderr
-    assert (outdir / "udonpred_trizod.caid").exists()
-    assert (outdir / "udonpred_disprot.caid").exists()
-    assert not (outdir / "udonpred_atlas.caid").exists()
+    assert (outdir / "trizod" / "seq1.caid").exists()
+    assert (outdir / "disprot" / "seq1.caid").exists()
+    assert not (outdir / "atlas").exists()
 
 
-def test_one_file_per_head_holds_all_proteins(tmp_path, weights_dir):
+def test_each_protein_gets_its_own_file(tmp_path, weights_dir):
     seqs = {"seq1": "MKTAYIAKQR", "seq2": "GGGCCCDDD"}
     (tmp_path / "in.fasta").write_text(
         "".join(f">{h}\n{s}\n" for h, s in seqs.items())
@@ -117,7 +124,12 @@ def test_one_file_per_head_holds_all_proteins(tmp_path, weights_dir):
     )
     assert res.returncode == 0, res.stderr
     for target in ("trizod", "disprot"):
-        text = (outdir / f"udonpred_{target}.caid").read_text()
-        # both proteins concatenated into the single per-head file
-        assert ">seq1\n" in text and ">seq2\n" in text
-        assert text.index(">seq1") < text.index(">seq2")
+        # one file per protein, each holding only its own protein
+        assert sorted(p.name for p in (outdir / target).iterdir()) == [
+            "seq1.caid",
+            "seq2.caid",
+        ]
+        for name in seqs:
+            text = (outdir / target / f"{name}.caid").read_text()
+            assert text.startswith(f">{name}\n")
+            assert text.count(">") == 1
