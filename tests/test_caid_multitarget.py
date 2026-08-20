@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from udonpred.caid.predict import discover_targets
+from udonpred.heads import discover_targets
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src"

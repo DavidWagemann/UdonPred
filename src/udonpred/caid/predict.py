@@ -24,49 +24,15 @@ Example::
 """
 
 import argparse
-import sys
-from pathlib import Path
 
+from udonpred.cli import common_parser
 from udonpred.datasets import resolve_embeddings_ref
-from udonpred.fasta import format_predictions, read_fasta, safe_filename
-from udonpred.heads import (
-    DEFAULT_HEADS_REPO,
-    DEFAULT_HEADS_REVISION,
-    resolve_model_dir,
-)
-from udonpred.inference import (
-    binarize_scores,
-    load_head,
-    normalize_scores,
-    score_embeddings,
-    smooth_scores,
-    unknown_targets,
-)
+from udonpred.fasta import read_fasta
+from udonpred.heads import resolve_model_dir, resolve_targets
+from udonpred.inference import load_head, score_embeddings, unknown_targets
+from udonpred.output import CaidWriter
 
 from udonpred.caid.embeddings import align_embedding, load_precomputed_embeddings
-
-
-def discover_targets(model_dir) -> list[str]:
-    """Return the sorted stem names of every ``*.onnx`` head in ``model_dir``."""
-    return sorted(p.stem for p in Path(model_dir).glob("*.onnx"))
-
-
-def resolve_targets(model_dir, requested: list[str]) -> list[str]:
-    """Resolve requested target names to validated head stems.
-
-    ``["all"]`` expands to every ``*.onnx`` head in ``model_dir``; otherwise
-    each requested name must have a matching ``{name}.onnx`` file.
-    """
-    model_dir_path = Path(model_dir)
-    if requested == ["all"]:
-        targets = discover_targets(model_dir_path)
-        if not targets:
-            raise ValueError(f"No .onnx heads found in {model_dir}")
-        return targets
-    for name in requested:
-        if not (model_dir_path / f"{name}.onnx").exists():
-            raise ValueError(f"ONNX head not found: {model_dir_path / f'{name}.onnx'}")
-    return requested
 
 
 def run(
@@ -90,7 +56,6 @@ def run(
     model_dir_path = resolve_model_dir(model_dir, revision)
 
     targets = resolve_targets(model_dir_path, target)
-    multi = len(targets) > 1
 
     # Fail before loading any head or embedding file if a requested head has no
     # registered policy — its threshold is needed for the binary column, and its
@@ -112,37 +77,15 @@ def run(
         for name in targets
     }
 
-    # CAID layout: one directory per prediction head ("flavor"), holding one
-    # file per protein ({target}/{protein}.caid). The embedding is aligned once
-    # per sequence and reused across every head.
-    out_dirs = None
-    if output_path:
-        out_dirs = {}
-        for name in targets:
-            out_dirs[name] = Path(output_path) / name
-            out_dirs[name].mkdir(parents=True, exist_ok=True)
+    writer = CaidWriter(output_path, targets, smooth=smooth, normalize=normalize)
 
+    # The embedding is aligned once per sequence and reused across every head.
     for index, (header, seq) in enumerate(entries):
         emb = align_embedding(source.get(header, index), len(seq))
         batched = emb[None, ...]
         for name, head in heads.items():
             scores_seq = score_embeddings(head, batched)[0][: len(seq)]
-            # Smooth on the raw scale, then read off the binary calls (whose
-            # thresholds are in raw units) before rescaling the scores.
-            scores_seq = smooth_scores(scores_seq, smooth)
-            binary_seq = binarize_scores(scores_seq, name)
-            if normalize:
-                scores_seq = normalize_scores(scores_seq, name)
-            formatted_lines = format_predictions(header, seq, scores_seq, binary_seq)
-
-            if out_dirs is not None:
-                out_file = out_dirs[name] / f"{safe_filename(header)}.caid"
-                with out_file.open("w") as handle:
-                    handle.writelines(formatted_lines)
-            else:
-                if multi:
-                    sys.stdout.write(f"# target: {name}\n")
-                sys.stdout.writelines(formatted_lines)
+            writer.write(name, header, seq, scores_seq)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -150,24 +93,8 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "CAID4 UdonPred runner: predict protein disorder from precomputed "
             "ProstT5 embeddings (no PLM, CPU-only by default)."
-        )
-    )
-    parser.add_argument("fasta", type=str, help="Path to input FASTA file")
-    parser.add_argument(
-        "model_dir",
-        type=str,
-        nargs="?",
-        default=None,
-        help="Directory containing the ONNX heads, or a Hugging Face repo id. "
-        f"A local directory is used as-is (offline). Omit to pull the pinned "
-        f"Hub release ({DEFAULT_HEADS_REPO} @ {DEFAULT_HEADS_REVISION}).",
-    )
-    parser.add_argument(
-        "--revision",
-        type=str,
-        default=None,
-        help="Hub revision (tag/branch/commit) to pull heads from when model_dir "
-        f"is a repo id or omitted (default: {DEFAULT_HEADS_REVISION}).",
+        ),
+        parents=[common_parser(device_choices=["cpu", "cuda"], device_default="cpu")],
     )
     parser.add_argument(
         "--embeddings",
@@ -177,59 +104,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to precomputed ProstT5 embeddings (.npy single sequence, "
         "or .h5 keyed by FASTA header), or a Hub reference like "
         "udonpred/datasets:trizod/embeddings/prostt5/test.h5.",
-    )
-    parser.add_argument(
-        "--target",
-        "-t",
-        type=str,
-        nargs="+",
-        default=["trizod"],
-        metavar="TARGET",
-        help="One or more prediction types, each matching a {target}.onnx file "
-        "in model_dir (trizod, chezod, softdis, pdbflex, atlas, plddt, "
-        "disprot). Use 'all' to run every head in model_dir. Each head writes "
-        "its own {target}/ subdirectory of the output directory. Default: trizod.",
-    )
-    parser.add_argument(
-        "--output",
-        "-o",
-        type=str,
-        default=None,
-        help="Output directory. Each head gets a {target}/ subdirectory holding "
-        "one {protein}.caid file per input protein. Writes to stdout if unset.",
-    )
-    parser.add_argument(
-        "--device",
-        "-d",
-        type=str,
-        default="cpu",
-        choices=["cpu", "cuda"],
-        help="Device for ONNX inference (default: cpu).",
-    )
-    parser.add_argument(
-        "--threads",
-        "-j",
-        type=int,
-        default=None,
-        help="Max CPU threads for ONNX inference (default: onnxruntime decides).",
-    )
-    parser.add_argument(
-        "--smooth",
-        "-s",
-        type=float,
-        default=1.5,
-        metavar="SIGMA",
-        help="Sigma for Gaussian smoothing of per-residue scores "
-        "(0 to disable, default: 1.5)",
-    )
-    parser.add_argument(
-        "--normalize",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Map scores onto the CAID convention — [0, 1] where higher means "
-        "more disordered: flip chezod/plddt and rescale every non-sigmoid head "
-        "by its fixed scale. Does not affect the binary column. Use "
-        "--no-normalize for raw head output (default: enabled).",
     )
     return parser
 

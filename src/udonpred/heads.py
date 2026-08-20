@@ -64,6 +64,29 @@ def resolve_model_dir(source: str | None = None, revision: str | None = None) ->
     return _download_heads(repo_id, rev)
 
 
+def discover_targets(model_dir: str | Path) -> list[str]:
+    """Return the sorted stem names of every ``*.onnx`` head in ``model_dir``."""
+    return sorted(p.stem for p in Path(model_dir).glob("*.onnx"))
+
+
+def resolve_targets(model_dir: str | Path, requested: list[str]) -> list[str]:
+    """Resolve requested target names to validated head stems.
+
+    ``["all"]`` expands to every ``*.onnx`` head in ``model_dir``; otherwise
+    each requested name must have a matching ``{name}.onnx`` file.
+    """
+    model_dir_path = Path(model_dir)
+    if requested == ["all"]:
+        targets = discover_targets(model_dir_path)
+        if not targets:
+            raise ValueError(f"No .onnx heads found in {model_dir}")
+        return targets
+    for name in requested:
+        if not (model_dir_path / f"{name}.onnx").exists():
+            raise ValueError(f"ONNX head not found: {model_dir_path / f'{name}.onnx'}")
+    return requested
+
+
 def _download_heads(repo_id: str, revision: str) -> Path:
     """Download the ``*.onnx`` heads from the Hub, returning the cached directory."""
     try:
