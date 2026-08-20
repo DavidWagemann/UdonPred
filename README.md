@@ -43,10 +43,35 @@ Options:
 - `--embeddings` (required), `--output` (dir; stdout if unset),
   `--device` (cpu/cuda, default cpu), `--threads` (CPU thread cap),
   `--smooth` (Gaussian sigma, 0 to disable).
+- `--normalize` / `--no-normalize` — map scores onto the CAID convention
+  (default: enabled). See below.
 
 **Output:** one CAID file **per prediction head**, named `udonpred_<target>.caid`, each
 holding the predictions for **all** input proteins concatenated, written flat into the
 output directory (e.g. `out/udonpred_trizod.caid`, `out/udonpred_disprot.caid`).
+
+#### Score Normalization
+
+CAID expects per-residue scores in `[0, 1]` where **higher means more disordered**, but the
+heads do not all natively produce that: four end in a sigmoid, while the rest are unbounded
+regressions on their target's own scale — and `chezod`/`plddt` run the *other* way (higher =
+more ordered). `--normalize` (on by default) reconciles this, clamping each head to its fixed
+a-priori scale, rescaling onto `[0, 1]`, and flipping where needed:
+
+| head | raw output | higher means | applied transform |
+| --- | --- | --- | --- |
+| `trizod`, `disprot`, `softdis` | `[0, 1]` (sigmoid) | disorder | none (passed through) |
+| `chezod` | CheZOD Z-score, unbounded | order | `1 - (clamp(x, -5, 16.15) + 5) / 21.15` |
+| `plddt` | pLDDT, unbounded | order | `1 - clamp(x, 0, 100) / 100` |
+| `pdbflex` | Å RMSD, unbounded | disorder | `clamp(x, 0, 10) / 10` |
+| `atlas` | Å RMSF, unbounded | disorder | `clamp(x, 0, 10) / 10` |
+
+Bounds are fixed rather than derived from the input's observed min/max, so a residue's score
+does not depend on which other proteins were in the same run. Smoothing is applied first, on
+the raw scale. Pass `--no-normalize` to get raw head output — useful for regression analysis,
+but not CAID-compliant. The policy table lives in
+[`src/udonpred/inference.py`](src/udonpred/inference.py) (`TARGET_NORMALIZATION`); a head with
+no entry there is rejected up front unless `--no-normalize` is given.
 
 #### How to Generate Embeddings
 **Important note:** The CAID4 predictor (`udonpred-caid`, i.e. `udonpred.caid.predict`) does **not** run the protein language

@@ -10,6 +10,12 @@ Each prediction head writes a single ``udonpred_{target}.caid`` file containing 
 input proteins concatenated; with ``--target all`` every head's file lands flat
 in the same output directory.
 
+By default (``--normalize``) scores are mapped onto the CAID convention — ``[0, 1]``
+where higher means more disordered — which flips the ``chezod`` and ``plddt``
+heads and rescales every non-sigmoid head by its fixed scale (see
+``udonpred.inference.TARGET_NORMALIZATION``). Pass ``--no-normalize`` for raw
+head output.
+
 Example::
 
     udonpred-caid input.fasta weights/ \\
@@ -27,7 +33,13 @@ from udonpred.heads import (
     DEFAULT_HEADS_REVISION,
     resolve_model_dir,
 )
-from udonpred.inference import load_head, score_embeddings, smooth_scores
+from udonpred.inference import (
+    load_head,
+    normalize_scores,
+    score_embeddings,
+    smooth_scores,
+    unknown_normalization_targets,
+)
 
 from udonpred.caid.embeddings import align_embedding, load_precomputed_embeddings
 
@@ -65,6 +77,7 @@ def run(
     threads: int | None,
     smooth: float,
     revision: str | None = None,
+    normalize: bool = True,
 ) -> None:
     entries = read_fasta(fasta)
     if not entries:
@@ -76,6 +89,16 @@ def run(
 
     targets = resolve_targets(model_dir_path, target)
     multi = len(targets) > 1
+
+    # Fail before loading any head or embedding file if a requested head has no
+    # registered normalization policy.
+    if normalize:
+        unknown = unknown_normalization_targets(targets)
+        if unknown:
+            raise ValueError(
+                f"--normalize has no policy for: {', '.join(unknown)}. Add it to "
+                "udonpred.inference.TARGET_NORMALIZATION or pass --no-normalize."
+            )
 
     # `embeddings` may be a local .h5/.npy path or a Hub reference
     # (repo_id:path_in_repo[@revision]).
@@ -102,7 +125,10 @@ def run(
             batched = emb[None, ...]
             for name, head in heads.items():
                 scores_seq = score_embeddings(head, batched)[0][: len(seq)]
+                # Smooth on the raw scale, then map onto the CAID convention.
                 scores_seq = smooth_scores(scores_seq, smooth)
+                if normalize:
+                    scores_seq = normalize_scores(scores_seq, name)
                 formatted_lines = format_predictions(header, seq, scores_seq)
 
                 if out_files is not None:
@@ -195,6 +221,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Sigma for Gaussian smoothing of per-residue scores "
         "(0 to disable, default: 1.5)",
     )
+    parser.add_argument(
+        "--normalize",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Map scores onto the CAID convention — [0, 1] where higher means "
+        "more disordered: flip chezod/plddt and rescale every non-sigmoid head "
+        "by its fixed scale. Use --no-normalize for raw head output "
+        "(default: enabled).",
+    )
     return parser
 
 
@@ -210,6 +245,7 @@ def main() -> None:
         threads=args.threads,
         smooth=args.smooth,
         revision=args.revision,
+        normalize=args.normalize,
     )
 
 
