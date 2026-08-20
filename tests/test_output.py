@@ -86,7 +86,7 @@ def test_timings_csv_written_per_flavor_directory(tmp_path):
 
     for target in ("trizod", "chezod"):
         banner, head, rows = _timings(tmp_path / target / "timings.csv")
-        assert banner.startswith("# Running UdonPred, started ")
+        assert banner == "# Running UdonPred"
         assert head == "sequence,milliseconds"
         assert [r.split(",")[0] for r in rows] == ["P04637", "P38398"]
         for row in rows:
@@ -146,15 +146,15 @@ def test_no_timings_file_in_stdout_mode(tmp_path, capsys):
     assert not list(tmp_path.iterdir())
 
 
-def test_format_started_matches_the_caid_banner_shape():
-    import re
-    import time
+def test_timings_banner_has_no_timestamp(tmp_path):
+    # repeated runs over the same input must produce byte-identical timings.csv
+    # banners, so the banner carries no date
+    with CaidWriter(str(tmp_path), ["trizod"], smooth=0) as writer:
+        with writer.timing("trizod", "P04637"):
+            writer.write("trizod", "P04637", "M", np.array([[0.9]]))
 
-    from udonpred.output import format_started
-
-    # "Sun Feb  5 10:20:57 CET 2023" — day space-padded to width 2
-    stamp = format_started(time.time())
-    assert re.fullmatch(r"[A-Z][a-z]{2} [A-Z][a-z]{2} [ \d]\d \d{2}:\d{2}:\d{2} .+ \d{4}", stamp), stamp
-
-    single_digit_day = time.mktime((2023, 2, 5, 10, 20, 57, 0, 0, -1))
-    assert format_started(single_digit_day).startswith("Sun Feb  5 10:20:57")
+    banner = (tmp_path / "trizod" / "timings.csv").read_text().splitlines()[0]
+    assert banner == "# Running UdonPred"
+    assert "started" not in banner
+    for token in ("20", "CET", "CEST", "UTC", ":"):
+        assert token not in banner

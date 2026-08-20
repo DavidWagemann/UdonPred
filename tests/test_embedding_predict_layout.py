@@ -120,7 +120,7 @@ def test_on_the_fly_runner_writes_timings_per_flavor(
 
     for target in ("trizod", "plddt"):
         lines = (tmp_path / "out" / target / "timings.csv").read_text().splitlines()
-        assert lines[0].startswith("# Running UdonPred, started ")
+        assert lines[0] == "# Running UdonPred"
         assert lines[1] == "sequence,milliseconds"
         assert [line.split(",")[0] for line in lines[2:]] == ["P04637", "P38398"]
         for line in lines[2:]:

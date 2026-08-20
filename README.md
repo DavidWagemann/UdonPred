@@ -69,7 +69,7 @@ protein:
 
 ```
 out/chezod/timings.csv
-    # Running UdonPred, started Sun Feb  5 10:20:57 CET 2023
+    # Running UdonPred
     sequence,milliseconds
     P04637,1827
 ```
@@ -80,8 +80,9 @@ binarization, and writing the `.caid` file. One-time setup (reading the FASTA, l
 heads and backbone, opening the embedding file) is excluded. Embedding preparation is done
 once per protein and shared across heads, so each head is charged for it — running one flavor
 alone would still pay that cost. Protein names come from the FASTA header, quoted if they
-contain a comma. Nothing is written when predictions go to stdout, since there is no
-directory to put the file in.
+contain a comma. The banner deliberately carries no timestamp, so re-running over the same
+input produces byte-identical files. Nothing is written when predictions go to stdout, since
+there is no directory to put the file in.
 
 #### Score Normalization and Binarization
 

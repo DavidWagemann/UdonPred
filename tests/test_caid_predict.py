@@ -254,7 +254,7 @@ def test_timings_csv_written_next_to_each_flavors_predictions(tmp_path, weights_
 
     for target in ("trizod", "chezod"):
         lines = (outdir / target / "timings.csv").read_text().splitlines()
-        assert lines[0].startswith("# Running UdonPred, started ")
+        assert lines[0] == "# Running UdonPred"
         assert lines[1] == "sequence,milliseconds"
         # one row per input protein, in input order, alongside its .caid file
         assert [line.split(",")[0] for line in lines[2:]] == list(seqs)
