@@ -31,3 +31,27 @@ def test_on_the_fly_predictor_module_imports():
 
     assert hasattr(predict, "run_exported")
     assert hasattr(predict, "main")
+
+
+def test_embedding_runner_shares_the_caid_cli_and_output_contract():
+    """Both runners must expose the same flags and write the same layout."""
+    from udonpred.caid.predict import build_parser as caid_parser
+    from udonpred.embedding.predict import build_parser as embedding_parser
+
+    def flags(parser):
+        return {
+            opt
+            for action in parser._actions
+            for opt in action.option_strings
+            if opt.startswith("--")
+        }
+
+    shared = flags(caid_parser()) & flags(embedding_parser())
+    for flag in ("--target", "--output", "--smooth", "--normalize", "--revision"):
+        assert flag in shared, flag
+
+    # the on-the-fly runner writes through the same shared writer
+    import udonpred.embedding.predict as predict
+    from udonpred.output import CaidWriter
+
+    assert predict.CaidWriter is CaidWriter

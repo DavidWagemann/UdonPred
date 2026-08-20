@@ -147,13 +147,16 @@ cached locally), or pass a **local directory** to use your own heads offline, or
 a **Hub repo id** to pull a different set. Fetching from the Hub needs the `hub`
 extra (`uv sync --extra hub`; bundled with `embedding`/`training`/dev).
 
-You can use the following options:
-- `--target`: chooses the model trained on the specified dataset (trizod, chezod, softdis, pdbflex, atlas, plddt, disprot). The default is trizod.
+This runner shares its flags and its output format with `udonpred-caid` — see
+[Score Normalization and Binarization](#score-normalization-and-binarization) above,
+which applies identically here. Options:
+- `--target`: one or more models trained on the given datasets (trizod, chezod, softdis, pdbflex, atlas, plddt, disprot), or `all` to run every head. The default is trizod.
 - `--revision`: Hub revision (tag/branch/commit) to pull the heads from when `model_dir` is a repo id or omitted (default: the pinned release).
-- `--output`: sets the output directory path. Each sequence will be saved as a .caid file. The output will be written to the terminal if this is not set.
+- `--output`: output directory. Each head gets a `<target>/` subdirectory holding one `<protein>.caid` file per input protein. The output goes to the terminal if this is not set.
+- `--normalize` / `--no-normalize`: map the score column onto the CAID `[0, 1]` disorder convention (default: enabled).
 - `--batch-size`: sets the total sequence length per batch. Try reducing this if you get an out of memory error.
-- `--device`: sets the device used for inference (cpu or cuda). Uses cuda by default if available.
-- `--smooth`: Applies gaussian smoothing with the give sigma to the results in order to remove prediction noise. 
+- `--device`: sets the device used for inference (auto, cpu, or cuda). Uses cuda by default if available.
+- `--smooth`: Applies gaussian smoothing with the given sigma to the results in order to remove prediction noise.
 
 ## Retraining
 Install the training stack with `uv sync --extra training`. UdonPred can be retrained by placing the required data as jsonl files in a data/ subfolder and pointing to it in `config/data.yaml`. The training configuration and architecture can be changed in `config/config.yaml` and `config/architecture.yaml` respectively. To start the training process, run `uv run udonpred-train train`.

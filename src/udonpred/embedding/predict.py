@@ -5,18 +5,20 @@ and computes embeddings itself. For the CAID4-compliant runner that consumes
 precomputed embeddings (no PLM in the container), see
 :mod:`udonpred.caid.predict`.
 
-Both runners share the FASTA, ONNX-head, and embedding logic in the
-``udonpred`` package; this script only adds the on-the-fly embedding loop.
+Both runners share the FASTA, ONNX-head, post-processing, output, and CLI logic
+in the ``udonpred`` package, and write the identical CAID layout: one directory
+per prediction head, holding one ``{protein}.caid`` file per input protein, whose
+rows are ``<index>\\t<residue>\\t<score>\\t<binary>``. This script only adds the
+on-the-fly embedding loop.
 """
 
 import argparse
-import sys
 from pathlib import Path
-from typing import List, Tuple
 
 import torch
 from tqdm import tqdm
 
+from udonpred.cli import common_parser
 from udonpred.embedding.backbone import (
     BACKBONE_NAME,
     compute_embeddings,
@@ -25,32 +27,42 @@ from udonpred.embedding.backbone import (
     resolve_device,
     tokenize_batch,
 )
-from udonpred.fasta import format_predictions, read_fasta
-from udonpred.heads import (
-    DEFAULT_HEADS_REPO,
-    DEFAULT_HEADS_REVISION,
-    resolve_model_dir,
-)
+from udonpred.fasta import read_fasta
+from udonpred.heads import resolve_model_dir, resolve_targets
 from udonpred.inference import (
     count_batches,
     iter_batches,
     load_head,
     score_embeddings,
-    smooth_scores,
+    unknown_targets,
 )
+from udonpred.output import CaidWriter
 
 
 def run_exported(
-    entries: List[Tuple[str, str]],
+    entries: list[tuple[str, str]],
     model_dir: str,
-    target: str,
+    target: list[str],
     max_total_seq_len: int,
     output_path: str | None,
     device: str,
     smooth: float = 1.5,
     threads: int | None = None,
+    normalize: bool = True,
 ) -> None:
-    """Run prediction using the HuggingFace backbone and ONNX prediction head."""
+    """Run prediction using the HuggingFace backbone and ONNX prediction heads."""
+    targets = resolve_targets(model_dir, target)
+
+    # Fail before loading the backbone if a requested head has no registered
+    # policy — its threshold is needed for the binary column, and its scale for
+    # --normalize.
+    unknown = unknown_targets(targets)
+    if unknown:
+        raise ValueError(
+            f"No policy registered for: {', '.join(unknown)}. Add it to "
+            "udonpred.inference.TARGET_POLICIES."
+        )
+
     torch_device = resolve_device(device)
     torch_dtype = torch.float16 if torch_device == "cuda" else torch.float32
 
@@ -60,15 +72,15 @@ def run_exported(
     print(f"Loading backbone ({BACKBONE_NAME}) ...")
     backbone = load_backbone(torch_device, torch_dtype)
 
-    onnx_path = Path(model_dir) / f"{target}.onnx"
-    print(f"Loading head ({onnx_path}) ...")
-    head = load_head(onnx_path, torch_device, threads=threads)
+    # Load every requested head once; each batch is embedded a single time and
+    # the embeddings reused across all heads.
+    heads = {}
+    for name in targets:
+        onnx_path = Path(model_dir) / f"{name}.onnx"
+        print(f"Loading head ({onnx_path}) ...")
+        heads[name] = load_head(onnx_path, torch_device, threads=threads)
 
-    if output_path:
-        out_dir = Path(output_path)
-        out_dir.mkdir(parents=True, exist_ok=True)
-    else:
-        out_dir = None
+    writer = CaidWriter(output_path, targets, smooth=smooth, normalize=normalize)
 
     total_batches = count_batches(entries, max_total_seq_len)
     with torch.inference_mode():
@@ -83,54 +95,20 @@ def run_exported(
             emb_np = compute_embeddings(
                 backbone, input_ids, attention_mask, max_seq_len
             )
-            scores_batch = score_embeddings(head, emb_np)
-
-            for header, seq, scores in zip(headers, seqs, scores_batch):
-                scores_seq = smooth_scores(scores[: len(seq)], smooth)
-                formatted_lines = format_predictions(header, seq, scores_seq)
-                if out_dir:
-                    safe_header = header.replace("/", "_").replace("|", "_")
-                    file_path = out_dir / f"udonpred_{safe_header}.caid"
-                    with file_path.open("w") as f:
-                        f.writelines(formatted_lines)
-                else:
-                    sys.stdout.writelines(formatted_lines)
+            for name, head in heads.items():
+                scores_batch = score_embeddings(head, emb_np)
+                for header, seq, scores in zip(headers, seqs, scores_batch):
+                    writer.write(name, header, seq, scores[: len(seq)])
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Predict different definitions of protein disorder."
-    )
-    parser.add_argument("fasta", type=str, help="Path to input FASTA file")
-    parser.add_argument(
-        "model_dir",
-        type=str,
-        nargs="?",
-        default=None,
-        help="Directory containing the ONNX heads, or a Hugging Face repo id. "
-        f"A local directory is used as-is (offline). Omit to pull the pinned "
-        f"Hub release ({DEFAULT_HEADS_REPO} @ {DEFAULT_HEADS_REVISION}).",
-    )
-    parser.add_argument(
-        "--target",
-        "-t",
-        type=str,
-        default="trizod",
-        help="Prediction type — must match a {target}.onnx file in model_dir",
-    )
-    parser.add_argument(
-        "--revision",
-        type=str,
-        default=None,
-        help="Hub revision (tag/branch/commit) to pull heads from when model_dir "
-        f"is a repo id or omitted (default: {DEFAULT_HEADS_REVISION}).",
-    )
-    parser.add_argument(
-        "--output",
-        "-o",
-        type=str,
-        default=None,
-        help="Output directory path (will save each sequence as a .caid file)",
+        description="Predict different definitions of protein disorder.",
+        parents=[
+            common_parser(
+                device_choices=["auto", "cpu", "cuda"], device_default="auto"
+            )
+        ],
     )
     parser.add_argument(
         "--batch-size",
@@ -139,32 +117,11 @@ def main() -> None:
         default=2000,
         help="Max total sequence length per batch (dynamic batching)",
     )
-    parser.add_argument(
-        "--device",
-        "-d",
-        type=str,
-        default="auto",
-        choices=["auto", "cpu", "cuda"],
-        help="Device for inference (auto, cpu, cuda).",
-    )
-    parser.add_argument(
-        "--threads",
-        "-j",
-        type=int,
-        default=None,
-        help="Max CPU threads for ONNX inference (default: onnxruntime decides).",
-    )
-    parser.add_argument(
-        "--smooth",
-        "-s",
-        type=float,
-        default=1.5,
-        metavar="SIGMA",
-        help="Sigma for Gaussian smoothing applied to per-residue scores "
-        "(0 to disable, default: 1.5)",
-    )
+    return parser
 
-    args = parser.parse_args()
+
+def main() -> None:
+    args = build_parser().parse_args()
 
     entries = read_fasta(args.fasta)
     if not entries:
@@ -185,6 +142,7 @@ def main() -> None:
         args.device,
         args.smooth,
         args.threads,
+        args.normalize,
     )
 
 
