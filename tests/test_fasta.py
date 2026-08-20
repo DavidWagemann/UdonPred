@@ -1,3 +1,5 @@
+import re
+
 from udonpred.fasta import (
     format_predictions,
     read_fasta,
@@ -49,3 +51,17 @@ def test_safe_filename_replaces_path_unsafe_characters():
     assert safe_filename("sp|P04637|P53_HUMAN") == "sp_P04637_P53_HUMAN"
     assert safe_filename("P04637 cellular tumor antigen") == "P04637_cellular_tumor_antigen"
     assert safe_filename("a/b") == "a_b"
+
+
+def test_format_predictions_always_uses_three_decimals():
+    scores = [0.0, 1.0, 0.5, 1e-9, 0.12349, 0.9999, -0.4, 123.456789, 34.0]
+    lines = format_predictions("hdr", "M" * len(scores), scores)
+    for line in lines[1:]:
+        score = line.split("\t")[2]
+        assert re.fullmatch(r"-?\d+\.\d{3}", score), score
+
+
+def test_format_predictions_rounds_rather_than_truncates():
+    lines = format_predictions("hdr", "MK", [0.12349, 0.9999])
+    assert lines[1].split("\t")[2] == "0.123"
+    assert lines[2].split("\t")[2] == "1.000"
