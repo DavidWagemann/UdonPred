@@ -25,10 +25,14 @@ docker build -t udonpred .
 Run a prediction (mount your data into `/data`). The heads live at `/app/weights`
 inside the image and are used automatically, so `model_dir` can be omitted:
 ```
-docker run --rm -v "$PWD":/data udonpred \
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/data udonpred \
     /data/input.fasta --embeddings /data/embeddings.h5 \
     --target all --threads 24 --output /data/out
 ```
+
+`--user "$(id -u):$(id -g)"` makes the container write as you rather than as root, so the
+predictions land in `out/` owned by your account — without it you need `sudo` to move or
+delete them. Drop it only if your Docker setup already maps users (e.g. rootless Docker).
 
 Generate the embeddings beforehand (outside the container) with
 ProstT5 model `Rostlab/ProstT5_fp16`; see [EMBEDDINGS.md](EMBEDDINGS.md) for the
