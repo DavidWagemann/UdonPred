@@ -173,9 +173,7 @@ def harness(tmp_path, monkeypatch):
 
     monkeypatch.setattr(build_model, "load_model", fake_load_model)
     FakeTrainer.instances = []
-    yield seen
-    # the pre-refactor run() leaked its config into sys.modules
-    sys.modules.pop("config", None)
+    return seen
 
 
 def _layer_types(module):
@@ -251,6 +249,17 @@ def test_hyperparameter_path_falls_back_to_the_config_dir(harness):
     run.run("train")
     hp_path = FakeTrainer.instances[0].config["config"]["hyperparameter_path"]
     assert hp_path == str(Path(run.CONFIG_DIR) / "architecture.yaml")
+
+
+def test_run_leaves_no_global_config(harness):
+    run.run("train")
+    assert "config" not in sys.modules
+
+
+def test_load_config_reads_an_explicit_dir(harness, tmp_path):
+    config = run.load_config(str(tmp_path / "config"))
+    assert set(config) == {"config", "data", "architecture", "optimize"}
+    assert config["architecture"]["dim_0"] == 4
 
 
 def test_invalid_mode_is_rejected(harness):

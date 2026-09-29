@@ -1,4 +1,3 @@
-import sys
 import copy
 from importlib import import_module
 
@@ -190,7 +189,7 @@ def build_prediction_heads(trial, config):
     return prediction_heads
 
 
-def model_init(trial):
+def model_init(trial, config):
     """Initialize a UdonPred model for training.
     
     Creates a model instance with hyperparameters suggested by the trial
@@ -198,13 +197,13 @@ def model_init(trial):
     configured losses and metrics.
     
     Args:
-        trial: Optuna trial object for hyperparameter suggestion, or None for defaults.
+        trial: Optuna trial object or dict of fixed hyperparameters, or None
+            for defaults.
+        config: Full configuration dictionary (config, data, optimize sections).
     
     Returns:
         UdonPred: The initialized model.
     """
-    config = sys.modules["config"]
-
     output_keys = set()
     for ds in config["data"]:
         if config["data"][ds]["fraction"] > 0:

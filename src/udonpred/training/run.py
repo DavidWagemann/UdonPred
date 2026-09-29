@@ -1,7 +1,7 @@
 import argparse
 import inspect
 import os
-import sys
+from functools import partial
 from pathlib import Path
 
 import yaml
@@ -94,7 +94,7 @@ def get_data(config):
     return get_datasets(config, train_filter)
 
 
-def hp_space(trial):
+def hp_space(trial, config):
     """Define non-architecture hyperparameter search space for Optuna optimization.
     
     Creates a hyperparameter space of options unrelated to model architecture 
@@ -103,12 +103,11 @@ def hp_space(trial):
     
     Args:
         trial: Optuna trial object for suggesting hyperparameter values.
+        config: Full configuration dictionary (config and optimize sections).
     
     Returns:
         dict: Dictionary of suggested hyperparameters for training.
     """
-    config = sys.modules["config"]
-
     total_batch_size = suggest(trial, "batch_size", config["optimize"]["batch_size"])
     batch_size, gradient_accumulation_steps = calculate_batch_sizes(
         total_batch_size, config["config"]["max_single_batch_size"]
@@ -183,7 +182,7 @@ def train_model(config, datasets, collator):
 
     training_arguments = TrainingArguments(**training_arguments)
 
-    model = model_init(hyperparameters)
+    model = model_init(hyperparameters, config)
 
     # Stop once eval_loss hasn't improved for `early_stopping` evaluations.
     callbacks = []
@@ -245,10 +244,11 @@ def run_optimization(config, datasets, collator):
 
     training_arguments = TrainingArguments(**training_arguments)
 
+    # HF calls model_init(trial) and hp_space(trial); bind the config up front.
     trainer = CustomTrainer(
         config=config,
         model=None,
-        model_init=model_init,
+        model_init=partial(model_init, config=config),
         args=training_arguments,
         data_collator=collator,
         train_dataset=datasets["train"],
@@ -268,7 +268,7 @@ def run_optimization(config, datasets, collator):
         )()
 
     best_run = trainer.hyperparameter_search(
-        hp_space=hp_space,
+        hp_space=partial(hp_space, config=config),
         compute_objective=lambda metrics: metrics["eval_loss"],
         **config["config"]["optim"],
     )
@@ -281,19 +281,18 @@ def run_optimization(config, datasets, collator):
         yaml.dump(best_run.hyperparameters, f)
 
 
-def run(mode: str):
-    """Load config and dispatch to training or hyperparameter optimization.
+def load_config(config_dir: str | None = None) -> dict:
+    """Load every ``*.yaml`` in the config dir, keyed by file stem.
 
-    Args:
-        mode: Either 'train' or 'optimize'
+    Applies the ``UDONPRED_*`` env overrides and resolves
+    ``hyperparameter_path`` against the config dir when it isn't found relative
+    to the cwd.
     """
+    config_dir = config_dir or CONFIG_DIR
     config = {}
-    for file in os.listdir(CONFIG_DIR):
-        name = file.replace(".yaml", "")
-        with open(f"{CONFIG_DIR}/{file}", "r") as f:
-            config[name] = yaml.safe_load(f)
-
-    sys.modules["config"] = config
+    for path in sorted(Path(config_dir).glob("*.yaml")):
+        with open(path, "r") as f:
+            config[path.stem] = yaml.safe_load(f)
 
     # Optional env overrides so one config can drive several runs (e.g. a Slurm
     # job array sweeping target x embeddings pLM). Kept explicit and few.
@@ -324,8 +323,18 @@ def run(mode: str):
     hp_path = config["config"]["hyperparameter_path"]
     if not os.path.isabs(hp_path) and not os.path.exists(hp_path):
         config["config"]["hyperparameter_path"] = os.path.join(
-            CONFIG_DIR, os.path.basename(hp_path)
+            config_dir, os.path.basename(hp_path)
         )
+    return config
+
+
+def run(mode: str):
+    """Load config and dispatch to training or hyperparameter optimization.
+
+    Args:
+        mode: Either 'train' or 'optimize'
+    """
+    config = load_config()
 
     os.environ["CUDA_VISIBLE_DEVICES"] = str(config["config"]["cuda_devices"])
 
