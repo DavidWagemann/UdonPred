@@ -153,7 +153,8 @@ def harness(tmp_path, monkeypatch):
     workdir.mkdir()
     monkeypatch.chdir(workdir)
     monkeypatch.setattr(run, "CONFIG_DIR", str(config_dir))
-    for var in ("UDONPRED_TARGET", "UDONPRED_EMBEDDINGS_PLM", "UDONPRED_RUN_NAME"):
+    for var in ("UDONPRED_TARGET", "UDONPRED_EMBEDDINGS_PLM", "UDONPRED_RUN_NAME",
+                "UDONPRED_MASK_TERMINI"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "")
     monkeypatch.delenv("WANDB_PROJECT", raising=False)
@@ -245,6 +246,21 @@ def test_explicit_run_name_wins(harness, monkeypatch):
     monkeypatch.setenv("UDONPRED_RUN_NAME", "custom")
     run.run("train")
     assert FakeTrainer.instances[0].config["config"]["run_name"] == "custom"
+
+
+def test_mask_termini_comes_from_env_and_tags_the_run(harness, monkeypatch):
+    monkeypatch.setenv("UDONPRED_TARGET", "chezod")
+    monkeypatch.setenv("UDONPRED_EMBEDDINGS_PLM", "prostt5")
+    monkeypatch.setenv("UDONPRED_MASK_TERMINI", "5")
+    config = run.load_config()
+    assert config["config"]["mask_termini"] == 5
+    assert config["config"]["run_name"] == "chezod-prostt5-termini5"
+
+
+def test_explicit_run_name_is_not_tagged(harness, monkeypatch):
+    monkeypatch.setenv("UDONPRED_MASK_TERMINI", "10")
+    monkeypatch.setenv("UDONPRED_RUN_NAME", "custom")
+    assert run.load_config()["config"]["run_name"] == "custom"
 
 
 def test_unknown_target_is_rejected(harness, monkeypatch):

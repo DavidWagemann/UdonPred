@@ -47,6 +47,10 @@ filter: False
 # Minimum protein length (residues) to train/validate/test on; 0 keeps all.
 # e.g. 50 or 100 to restrict to longer proteins, dropping short peptides.
 min_length: 0
+# Experiment: exclude the first and last N residues of every protein from
+# training by masking their labels (0 = off); valid/test are scored on every
+# residue. Overridden by UDONPRED_MASK_TERMINI.
+mask_termini: 0
 
 # Hyperparameter configuration
 hyperparameter_path: config/architecture.yaml

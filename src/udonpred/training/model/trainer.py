@@ -58,6 +58,19 @@ def get_object(p):
     return obj
 
 
+def mask_termini(y, lengths, k, mask_value=999):
+    """Return ``y`` with each protein's first and last ``k`` labels set to ``mask_value``.
+
+    ``y`` is a padded ``(batch, max_len)`` label batch and ``lengths`` the
+    proteins' own lengths, so the C-terminal window ends at each protein's last
+    residue rather than in the padding. The losses skip ``mask_value``.
+    """
+    positions = torch.arange(y.shape[1], device=y.device)
+    lengths = lengths.to(y.device)[:, None]
+    termini = (positions < k) | ((positions >= lengths - k) & (positions < lengths))
+    return y.masked_fill(termini, mask_value)
+
+
 class MetricsProgressCallback(TrainerCallback):
     """A single training progress bar whose postfix carries the latest metrics.
 
@@ -453,6 +466,13 @@ class CustomTrainer(Trainer):
             if num_items_in_batch is not None:
                 loss_kwargs["num_items_in_batch"] = num_items_in_batch
             inputs = {**inputs, **loss_kwargs}
+
+        # Experiment: exclude each protein's terminal residues from training by
+        # masking their labels. Only training batches pass through here;
+        # evaluate() scores valid/test on every residue.
+        n_termini = self.config["config"].get("mask_termini", 0)
+        if n_termini:
+            inputs = {**inputs, "y": mask_termini(inputs["y"], inputs["y_lens"], n_termini)}
 
         outputs = model(**inputs)
         model_outputs = {k: v for k, v in outputs.items() if k != "loss"}

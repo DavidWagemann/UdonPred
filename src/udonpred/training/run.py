@@ -324,6 +324,12 @@ def load_config(config_dir: str | None = None) -> dict:
         config["config"]["run_name"] = os.environ["UDONPRED_RUN_NAME"]
     elif target and plm:
         config["config"]["run_name"] = f"{target}-{plm}"
+    # Experiment: terminal-residue masking, tagged onto a derived run name.
+    if os.environ.get("UDONPRED_MASK_TERMINI"):
+        config["config"]["mask_termini"] = int(os.environ["UDONPRED_MASK_TERMINI"])
+    mask_termini = config["config"].get("mask_termini", 0)
+    if mask_termini and not os.environ.get("UDONPRED_RUN_NAME"):
+        config["config"]["run_name"] += f"-termini{mask_termini}"
 
     # Resolve the hyperparameter file relative to the packaged config dir when it
     # isn't found relative to the cwd, so training runs from any directory.
