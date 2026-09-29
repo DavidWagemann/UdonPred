@@ -23,6 +23,12 @@ fi
 SCRATCH="${SCRATCH:-/tmp/${USER:-$(id -un)}_udonpred}"
 export HF_HOME="$SCRATCH/hf"                   # downloaded embeddings .h5 + model config
 export UV_PROJECT_ENVIRONMENT="$SCRATCH/venv"  # project venv (torch, etc.)
+# uv, the Python it installs for the venv, and its download cache live in
+# SCRATCH too: a container's own filesystem is gone after each run, and a venv
+# whose interpreter went with it is unusable.
+export UV_PYTHON_INSTALL_DIR="$SCRATCH/uv/python"
+export UV_CACHE_DIR="$SCRATCH/uv/cache"
+export PATH="$SCRATCH/uv/tool/bin:$PATH"
 mkdir -p "$HF_HOME"
 
 # W&B: log online. The container runs with --no-container-mount-home and this
@@ -39,9 +45,20 @@ if [ "$WANDB_MODE" != "offline" ] && [ -z "${WANDB_API_KEY:-}" ]; then
   exit 1
 fi
 
-# uv isn't in the base image; install it on first use (into the ephemeral
-# container system python — fine, it's thrown away with the job).
-command -v uv >/dev/null || pip install --no-cache-dir uv
+# uv isn't in the base image: install it into SCRATCH on first use. Skip the
+# image's pip config, whose extra NVIDIA index is unreachable behind some proxies.
+if ! command -v uv >/dev/null; then
+  env -u PIP_EXTRA_INDEX_URL PIP_CONFIG_FILE=/dev/null \
+    pip install --no-cache-dir --quiet --target "$SCRATCH/uv/tool" uv
+fi
+
+# A venv whose interpreter is gone (created before uv's Python lived in
+# SCRATCH, or half-removed by a killed run) is one uv refuses to recreate:
+# start it over.
+if [ -d "$UV_PROJECT_ENVIRONMENT" ] && ! "$UV_PROJECT_ENVIRONMENT/bin/python" -c "" 2>/dev/null; then
+  echo "Removing unusable venv $UV_PROJECT_ENVIRONMENT"
+  rm -rf "$UV_PROJECT_ENVIRONMENT"
+fi
 
 uv sync --extra training --extra hub
 
