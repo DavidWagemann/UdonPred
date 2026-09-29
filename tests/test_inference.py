@@ -1,7 +1,6 @@
 import numpy as np
 
 from udonpred.inference import (
-    count_batches,
     iter_batches,
     load_head,
     load_heads,
@@ -20,11 +19,9 @@ def test_smooth_scores_preserves_length_and_disabled_passthrough():
     np.testing.assert_array_equal(smooth_scores(scores, sigma=0), scores)
 
 
-def test_iter_and_count_batches_agree():
+def test_iter_batches_yields_every_entry_once_in_order():
     items = [("a", "X" * 1500), ("b", "X" * 600), ("c", "X" * 600)]
     batches = list(iter_batches(items, max_total_len=2000))
-    assert count_batches(items, 2000) == len(batches)
-    # every entry appears exactly once across batches
     flat = [h for batch in batches for h, _ in batch]
     assert flat == ["a", "b", "c"]
 

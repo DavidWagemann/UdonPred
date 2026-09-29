@@ -29,7 +29,9 @@ def predict_module(monkeypatch):
     monkeypatch.setattr(predict, "load_tokenizer", lambda: object())
     monkeypatch.setattr(predict, "load_backbone", lambda device, dtype: object())
     monkeypatch.setattr(
-        predict, "tokenize_batch", lambda tok, seqs, device: (None, None)
+        predict,
+        "embed_batch",
+        lambda tokenizer, backbone, seqs, device: _fake_embeddings(seqs),
     )
     return predict
 
@@ -40,15 +42,9 @@ def _fake_embeddings(seqs):
 
 
 def test_on_the_fly_runner_writes_the_caid_layout(
-    tmp_path, weights_dir, predict_module, monkeypatch
+    tmp_path, weights_dir, predict_module
 ):
     entries = [("P04637", "MKTAYIAKQRQ"), ("sp|P38398|X", "GGGCCCDDD")]
-    seqs = [s for _, s in entries]
-    monkeypatch.setattr(
-        predict_module,
-        "compute_embeddings",
-        lambda *a, **k: _fake_embeddings(seqs),
-    )
 
     predict_module.run_exported(
         entries,
@@ -97,15 +93,9 @@ def test_on_the_fly_runner_rejects_head_without_policy(
 
 
 def test_on_the_fly_runner_writes_timings_per_flavor(
-    tmp_path, weights_dir, predict_module, monkeypatch
+    tmp_path, weights_dir, predict_module
 ):
     entries = [("P04637", "MKTAYIAKQRQ"), ("P38398", "GGGCCCDDD")]
-    seqs = [s for _, s in entries]
-    monkeypatch.setattr(
-        predict_module,
-        "compute_embeddings",
-        lambda *a, **k: _fake_embeddings(seqs),
-    )
 
     predict_module.run_exported(
         entries,

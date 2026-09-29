@@ -16,16 +16,14 @@ from tqdm import tqdm
 from udonpred.cli import common_parser
 from udonpred.embedding.backbone import (
     BACKBONE_NAME,
-    compute_embeddings,
+    embed_batch,
     load_backbone,
     load_tokenizer,
     resolve_device,
-    tokenize_batch,
 )
 from udonpred.fasta import read_fasta
 from udonpred.heads import resolve_model_dir, resolve_targets
 from udonpred.inference import (
-    count_batches,
     iter_batches,
     load_heads,
     require_policies,
@@ -63,24 +61,17 @@ def run_exported(
     print(f"Loading heads ({', '.join(targets)}) from {model_dir} ...")
     heads = load_heads(model_dir, targets, torch_device, threads=threads)
 
-    total_batches = count_batches(entries, max_total_seq_len)
+    batches = list(iter_batches(entries, max_total_seq_len))
     with CaidWriter(
         output_path, targets, smooth=smooth, normalize=normalize
     ) as writer, torch.inference_mode():
-        for batch in tqdm(
-            iter_batches(entries, max_total_seq_len), total=total_batches
-        ):
+        for batch in tqdm(batches):
             headers, seqs = zip(*batch)
-            seqs = list(seqs)
-            max_seq_len = max(len(s) for s in seqs)
 
             # One tokenize+embed pass serves the whole batch and every head, so
             # its cost is split per protein and charged to each head's timing.
             embed_start = perf_counter()
-            input_ids, attention_mask = tokenize_batch(tokenizer, seqs, torch_device)
-            emb_np = compute_embeddings(
-                backbone, input_ids, attention_mask, max_seq_len
-            )
+            emb_np = embed_batch(tokenizer, backbone, list(seqs), torch_device)
             embed_ms = (perf_counter() - embed_start) * 1000.0 / len(seqs)
 
             for name, head in heads.items():

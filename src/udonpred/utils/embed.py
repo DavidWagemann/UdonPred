@@ -26,15 +26,14 @@ from tqdm import tqdm
 
 from udonpred.embedding.backbone import (
     BACKBONE_NAME,
-    compute_embeddings,
+    embed_batch,
     load_backbone,
     load_tokenizer,
     resolve_device,
-    tokenize_batch,
 )
 from udonpred.datasets import plm_slug
 from udonpred.fasta import read_fasta
-from udonpred.inference import count_batches, iter_batches
+from udonpred.inference import iter_batches
 from udonpred.utils.publish import publish_embeddings
 
 
@@ -79,18 +78,10 @@ def generate(
     backbone = load_backbone(torch_device, torch_dtype)
 
     results: dict[str, np.ndarray] = {}
-    total_batches = count_batches(entries, max_total_seq_len)
     with torch.inference_mode():
-        for batch in tqdm(
-            iter_batches(entries, max_total_seq_len), total=total_batches
-        ):
+        for batch in tqdm(list(iter_batches(entries, max_total_seq_len))):
             headers, seqs = zip(*batch)
-            seqs = list(seqs)
-            max_seq_len = max(len(s) for s in seqs)
-            input_ids, attention_mask = tokenize_batch(tokenizer, seqs, torch_device)
-            emb_np = compute_embeddings(
-                backbone, input_ids, attention_mask, max_seq_len
-            )
+            emb_np = embed_batch(tokenizer, backbone, list(seqs), torch_device)
             for header, seq, emb in zip(headers, seqs, emb_np):
                 results[header] = emb[: len(seq)].astype(np.float32)
 

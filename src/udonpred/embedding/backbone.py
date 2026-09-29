@@ -86,3 +86,13 @@ def compute_embeddings(backbone, input_ids, attention_mask, max_seq_len: int):
     hidden = hidden * attention_mask.unsqueeze(-1)
     emb = hidden[:, PREFIX_TOKEN_LEN : PREFIX_TOKEN_LEN + max_seq_len, :]
     return emb.float().cpu().numpy()
+
+
+def embed_batch(tokenizer, backbone, seqs: List[str], torch_device: str):
+    """Tokenize and embed a batch, returning ``(batch, max_len, hidden)`` float32.
+
+    Rows past a sequence's own length are padding; slice them off per sequence.
+    """
+    input_ids, attention_mask = tokenize_batch(tokenizer, seqs, torch_device)
+    max_seq_len = max(len(seq) for seq in seqs)
+    return compute_embeddings(backbone, input_ids, attention_mask, max_seq_len)

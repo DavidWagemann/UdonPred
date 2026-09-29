@@ -196,22 +196,3 @@ def iter_batches(items: list[tuple[str, str]], max_total_len: int):
     if batch:
         yield batch
 
-
-def count_batches(items: list[tuple[str, str]], max_total_len: int) -> int:
-    """Count how many batches ``iter_batches`` will yield (for progress bars)."""
-    count = 0
-    total_len = 0
-    for _, seq in items:
-        seq_len = len(seq)
-        if count == 0 and total_len == 0 and seq_len == 0:
-            continue
-        if total_len and total_len + seq_len > max_total_len:
-            count += 1
-            total_len = 0
-        total_len += seq_len
-        if total_len >= max_total_len:
-            count += 1
-            total_len = 0
-    if total_len:
-        count += 1
-    return count
