@@ -114,3 +114,20 @@ def test_on_the_fly_runner_writes_timings_per_flavor(
         assert [line.split(",")[0] for line in lines[2:]] == ["P04637", "P38398"]
         for line in lines[2:]:
             assert int(line.split(",")[1]) >= 0
+
+
+def test_stdout_mode_carries_only_predictions(weights_dir, predict_module, capsys):
+    # without --output, stdout is the prediction stream, so progress messages
+    # must not end up in it
+    predict_module.run_exported(
+        [("P04637", "MKTAYIAKQRQ")],
+        str(weights_dir),
+        ["trizod"],
+        max_total_seq_len=2000,
+        output_path=None,
+        device="cpu",
+    )
+    out = capsys.readouterr().out.splitlines()
+    assert out[0] == ">P04637"
+    assert len(out) == 1 + len("MKTAYIAKQRQ")
+    assert all(len(line.split("\t")) == 4 for line in out[1:])

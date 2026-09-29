@@ -8,6 +8,7 @@ on-the-fly embedding loop.
 """
 
 import argparse
+import sys
 from time import perf_counter
 
 import torch
@@ -50,15 +51,17 @@ def run_exported(
     torch_device = resolve_device(device)
     torch_dtype = torch.float16 if torch_device == "cuda" else torch.float32
 
-    print(f"Loading tokenizer ({BACKBONE_NAME}) ...")
+    print(f"Loading tokenizer ({BACKBONE_NAME}) ...", file=sys.stderr)
     tokenizer = load_tokenizer()
 
-    print(f"Loading backbone ({BACKBONE_NAME}) ...")
+    print(f"Loading backbone ({BACKBONE_NAME}) ...", file=sys.stderr)
     backbone = load_backbone(torch_device, torch_dtype)
 
     # Load every requested head once; each batch is embedded a single time and
     # the embeddings reused across all heads.
-    print(f"Loading heads ({', '.join(targets)}) from {model_dir} ...")
+    print(
+        f"Loading heads ({', '.join(targets)}) from {model_dir} ...", file=sys.stderr
+    )
     heads = load_heads(model_dir, targets, torch_device, threads=threads)
 
     batches = list(iter_batches(entries, max_total_seq_len))
