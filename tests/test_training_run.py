@@ -263,6 +263,43 @@ def test_explicit_run_name_is_not_tagged(harness, monkeypatch):
     assert run.load_config()["config"]["run_name"] == "custom"
 
 
+def _tag_config(tags):
+    path = Path(run.CONFIG_DIR) / "config.yaml"
+    path.write_text(yaml.safe_dump({**CONFIG["config"], "experiment_tags": tags}))
+
+
+def test_experiment_tags_extend_a_derived_run_name(harness, monkeypatch):
+    _tag_config(["exp1", "exp2"])
+    monkeypatch.setenv("UDONPRED_TARGET", "chezod")
+    monkeypatch.setenv("UDONPRED_EMBEDDINGS_PLM", "prostt5")
+    assert run.load_config()["config"]["run_name"] == "chezod-prostt5-exp1-exp2"
+
+
+def test_experiment_tags_leave_an_explicit_run_name_alone(harness, monkeypatch):
+    _tag_config(["exp1"])
+    monkeypatch.setenv("UDONPRED_RUN_NAME", "custom")
+    assert run.load_config()["config"]["run_name"] == "custom"
+
+
+def _wandb_init_kwargs(monkeypatch, config):
+    seen = {}
+    monkeypatch.setattr(run.wandb, "init", lambda **kwargs: seen.update(kwargs))
+    run.setup_wandb({**config, "config": {**config["config"], "wandb": {"project": "P", "log_model": "end"}}})
+    return seen
+
+
+def test_wandb_run_carries_the_experiment_tags(monkeypatch):
+    config = {"config": {"run_name": "chezod-prostt5-exp1", "experiment_tags": ["exp1"]}}
+    kwargs = _wandb_init_kwargs(monkeypatch, config)
+    assert kwargs["name"] == "chezod-prostt5-exp1"
+    assert kwargs["tags"] == ["exp1"]
+
+
+def test_untagged_wandb_run_is_the_baseline(monkeypatch):
+    kwargs = _wandb_init_kwargs(monkeypatch, {"config": {"run_name": "chezod-prostt5"}})
+    assert kwargs["tags"] == ["baseline"]
+
+
 def test_unknown_target_is_rejected(harness, monkeypatch):
     monkeypatch.setenv("UDONPRED_TARGET", "nope")
     with pytest.raises(ValueError, match="UDONPRED_TARGET='nope'"):
