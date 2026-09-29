@@ -4,8 +4,9 @@ set -euo pipefail
 # Train the target x pLM matrix sequentially in a GPU container:
 #   SCRATCH=/local/disk scripts/docker/train.sh
 # SCRATCH (required) holds the venv and HF cache across runs; like the project
-# itself it must be on a local disk. Optional: IMAGE, MOUNT, GPUS, NETWORK,
-# WANDB_MODE.
+# itself it must be on a local disk. TARGETS and PLMS (space-separated) span the
+# matrix: every target is trained on every pLM. Exported UDONPRED_* settings are
+# passed into the container. Optional: IMAGE, MOUNT, GPUS, NETWORK, WANDB_MODE.
 
 PROJECT="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
 
@@ -29,27 +30,35 @@ if [ "$WANDB_MODE" != "offline" ] && [ -z "${WANDB_API_KEY:-}" ]; then
   exit 1
 fi
 
-TARGETS=(trizod trizod chezod chezod)
-PLMS=(frustraiseq prostt5 frustraiseq prostt5)
+read -r -a targets <<< "${TARGETS:-trizod chezod}"
+read -r -a plms <<< "${PLMS:-frustraiseq prostt5}"
+FORWARD=()
+for var in $(compgen -e | grep '^UDONPRED_' || true); do
+  FORWARD+=(-e "$var")
+done
 
-for i in "${!TARGETS[@]}"; do
-  target="${TARGETS[$i]}"
-  plm="${PLMS[$i]}"
-  echo ">>> Training $target x $plm ($((i + 1))/${#TARGETS[@]})"
-  docker run --rm \
-    --gpus "$GPUS" \
-    --network "$NETWORK" \
-    --ipc=host \
-    --ulimit memlock=-1 \
-    --ulimit stack=67108864 \
-    -e WANDB_MODE \
-    -e WANDB_API_KEY \
-    -e http_proxy -e https_proxy -e no_proxy \
-    -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
-    -e SCRATCH=/scratch \
-    -v "$PROJECT:$MOUNT" \
-    -v "$SCRATCH:/scratch" \
-    -w "$MOUNT" \
-    "$IMAGE" \
-    bash "$MOUNT/scripts/run_training.sh" "$target" "$plm"
+total=$((${#targets[@]} * ${#plms[@]}))
+run=0
+for target in "${targets[@]}"; do
+  for plm in "${plms[@]}"; do
+    run=$((run + 1))
+    echo ">>> Training $target x $plm ($run/$total)"
+    docker run --rm \
+      --gpus "$GPUS" \
+      --network "$NETWORK" \
+      --ipc=host \
+      --ulimit memlock=-1 \
+      --ulimit stack=67108864 \
+      -e WANDB_MODE \
+      -e WANDB_API_KEY \
+      ${FORWARD[@]+"${FORWARD[@]}"} \
+      -e http_proxy -e https_proxy -e no_proxy \
+      -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY \
+      -e SCRATCH=/scratch \
+      -v "$PROJECT:$MOUNT" \
+      -v "$SCRATCH:/scratch" \
+      -w "$MOUNT" \
+      "$IMAGE" \
+      bash "$MOUNT/scripts/run_training.sh" "$target" "$plm"
+  done
 done
