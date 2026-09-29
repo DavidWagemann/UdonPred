@@ -74,7 +74,7 @@ Add `--push-to-hub --dataset <target> --split <split>` to upload them to the dat
 
 ## Retraining
 Install the training stack with `uv sync --extra training`, fetch the datasets into `data/split/` with
-`scripts/fetch_data.sh`, and start training with `uv run udonpred-train train` (or `optimize` for a
+`scripts/fetch_data.sh` (the container launchers below do this themselves), and start training with `uv run udonpred-train train` (or `optimize` for a
 hyperparameter search). The data, training, and architecture settings live in `config/data.yaml`,
 `config/config.yaml`, and `config/architecture.yaml`. Set `min_length` in `config/config.yaml` to drop short
 proteins from training and evaluation.
