@@ -255,6 +255,7 @@ def test_mask_termini_comes_from_env_and_tags_the_run(harness, monkeypatch):
     config = run.load_config()
     assert config["config"]["mask_termini"] == 5
     assert config["config"]["run_name"] == "chezod-prostt5-termini5"
+    assert config["config"]["experiment_tags"] == ["termini5"]
 
 
 def test_explicit_run_name_is_not_tagged(harness, monkeypatch):
