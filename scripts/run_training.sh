@@ -45,6 +45,12 @@ command -v uv >/dev/null || pip install --no-cache-dir uv
 
 uv sync --extra training --extra hub
 
+# The jsonl splits are gitignored: fetch them on first use, here in the
+# container, so the host needs no Python packages.
+if ! compgen -G "data/split/${TARGET:-*}/train.jsonl" > /dev/null; then
+  scripts/fetch_data.sh
+fi
+
 # Single-process (1 GPU) training. Under srun, HF Trainer/accelerate detect the
 # SLURM env and try to init torch.distributed via env:// rendezvous, which fails
 # with "WORLD_SIZE expected, but not set". Pin a 1-rank world so the process
