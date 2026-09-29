@@ -78,6 +78,15 @@ def resolve_embeddings_ref(source: str, revision: str | None = None) -> Path:
     return _hf_download(repo_id, path_in_repo, rev)
 
 
+def _download_from_dataset_repo(
+    filename: str, repo: str | None, revision: str | None
+) -> Path:
+    """Download ``filename``; explicit args beat ``$UDONPRED_DATASET_*`` beat defaults."""
+    repo = repo or os.environ.get(ENV_DATASET_REPO) or DEFAULT_DATASET_REPO
+    rev = revision or os.environ.get(ENV_DATASET_REVISION) or DEFAULT_DATASET_REVISION
+    return _hf_download(repo, filename, rev)
+
+
 def resolve_embeddings(
     target: str,
     split: str,
@@ -86,9 +95,9 @@ def resolve_embeddings(
     revision: str | None = None,
 ) -> Path:
     """Download ``<target>/embeddings/<plm>/<split>.h5`` from the dataset repo."""
-    repo = repo or os.environ.get(ENV_DATASET_REPO) or DEFAULT_DATASET_REPO
-    rev = revision or os.environ.get(ENV_DATASET_REVISION) or DEFAULT_DATASET_REVISION
-    return _hf_download(repo, f"{target}/embeddings/{plm}/{split}.h5", rev)
+    return _download_from_dataset_repo(
+        f"{target}/embeddings/{plm}/{split}.h5", repo, revision
+    )
 
 
 def resolve_split_file(
@@ -99,6 +108,4 @@ def resolve_split_file(
     revision: str | None = None,
 ) -> Path:
     """Download ``<target>/<split>.<kind>`` (``jsonl``/``fasta``) from the repo."""
-    repo = repo or os.environ.get(ENV_DATASET_REPO) or DEFAULT_DATASET_REPO
-    rev = revision or os.environ.get(ENV_DATASET_REVISION) or DEFAULT_DATASET_REVISION
-    return _hf_download(repo, f"{target}/{split}.{kind}", rev)
+    return _download_from_dataset_repo(f"{target}/{split}.{kind}", repo, revision)
