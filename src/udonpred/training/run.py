@@ -69,6 +69,7 @@ def setup_wandb(config, hyperparameters=None):
         wandb.init(
             project=os.environ["WANDB_PROJECT"],
             name=config["config"]["run_name"],
+            tags=config["config"].get("experiment_tags") or ["baseline"],
             config=config | (hyperparameters or {}),
         )
 
@@ -332,6 +333,13 @@ def load_config(config_dir: str | None = None) -> dict:
         config["config"]["hyperparameter_path"] = os.path.join(
             config_dir, os.path.basename(hp_path)
         )
+
+    # Experiments tag their runs (config.experiment_tags): the tags extend a
+    # derived run name and become the W&B run's tags; untagged runs are the
+    # baseline.
+    tags = config["config"].setdefault("experiment_tags", [])
+    if tags and not os.environ.get("UDONPRED_RUN_NAME"):
+        config["config"]["run_name"] += "-" + "-".join(tags)
     return config
 
 
