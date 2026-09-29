@@ -78,10 +78,3 @@ def test_env_overrides_repo_and_revision(monkeypatch, capture_download):
 def test_explicit_revision_beats_default(clean_env, capture_download):
     resolve_model_dir(None, revision="main")
     assert capture_download == [(DEFAULT_HEADS_REPO, "main")]
-
-
-def test_default_revision_is_the_seven_head_submission_set():
-    """Guard the CAID-submission pin: v0.2.0 would add trizod2 to --target all."""
-    from udonpred.heads import DEFAULT_HEADS_REVISION
-
-    assert DEFAULT_HEADS_REVISION == "v0.1.0"

@@ -1,12 +1,12 @@
 """Resolve UdonPred ONNX prediction heads from a local directory or the Hub.
 
 The heads live in the public Hugging Face repo ``udonpred/prediction-heads``
-(the seven ``*.onnx`` files of the pinned release, tagged per release). Inference can consume them
-either from a local directory or by downloading a pinned revision from the Hub.
+(the ``*.onnx`` files, tagged per release). Inference consumes them either from
+a local directory or by downloading a pinned revision from the Hub.
 
 Only the download path imports :mod:`huggingface_hub`, so purely-local use stays
-hub-free and needs no network access. Publishing new heads after (re)training lives in
-:mod:`udonpred.utils.export`.
+hub-free and needs no network access. Publishing new heads after (re)training
+lives in :mod:`udonpred.utils.export`.
 """
 
 import os
@@ -15,10 +15,8 @@ from pathlib import Path
 # Source of truth for the released prediction heads.
 DEFAULT_HEADS_REPO = "udonpred/prediction-heads"
 # Pinned, overridable: bump this (and publish a matching tag) on retraining.
-# v0.1.0 is the CAID-submission set — the seven established heads. v0.2.0 adds
-# trizod2 (the other seven blobs are identical), which `--target all` would
-# otherwise pick up; pass --revision v0.2.0 or a repo id to opt into it.
-DEFAULT_HEADS_REVISION = "v0.1.0"
+# v0.2.0 is the seven v0.1.0 heads (identical blobs) plus trizod2.
+DEFAULT_HEADS_REVISION = "v0.2.0"
 
 # Environment overrides (all optional).
 ENV_HEADS_DIR = "UDONPRED_HEADS_DIR"
