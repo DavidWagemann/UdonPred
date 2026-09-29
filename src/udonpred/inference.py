@@ -81,6 +81,19 @@ def load_head(
     )
 
 
+def load_heads(
+    model_dir: str | Path,
+    targets: Iterable[str],
+    device: str,
+    threads: int | None = None,
+) -> dict[str, ort.InferenceSession]:
+    """Load the ``{target}.onnx`` head from ``model_dir`` for every target."""
+    return {
+        name: load_head(Path(model_dir) / f"{name}.onnx", device, threads=threads)
+        for name in targets
+    }
+
+
 def score_embeddings(
     head: ort.InferenceSession,
     embeddings: np.ndarray,
@@ -109,9 +122,18 @@ def smooth_scores(scores: np.ndarray, sigma: float) -> np.ndarray:
     )
 
 
-def unknown_targets(targets: Iterable[str]) -> list[str]:
-    """Return the requested target names that have no registered policy."""
-    return [name for name in targets if name not in TARGET_POLICIES]
+def require_policies(targets: Iterable[str]) -> None:
+    """Fail fast if any requested head has no registered policy.
+
+    Its threshold is needed for the binary column and its scale for
+    normalization, so runners call this before loading heads or embeddings.
+    """
+    unknown = [name for name in targets if name not in TARGET_POLICIES]
+    if unknown:
+        raise ValueError(
+            f"No policy registered for: {', '.join(unknown)}. Add it to "
+            "udonpred.inference.TARGET_POLICIES."
+        )
 
 
 def target_policy(target: str) -> TargetPolicy:

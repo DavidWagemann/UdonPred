@@ -4,6 +4,7 @@ from udonpred.inference import (
     count_batches,
     iter_batches,
     load_head,
+    load_heads,
     score_embeddings,
     smooth_scores,
 )
@@ -61,3 +62,11 @@ def test_score_embeddings_real_head_shape_and_range(weights_dir):
     flat = scores.reshape(-1)
     # sigmoid output -> probabilities in [0, 1]
     assert flat.min() >= 0.0 and flat.max() <= 1.0
+
+
+def test_load_heads_keys_sessions_by_target(weights_dir):
+    heads = load_heads(weights_dir, ["trizod", "chezod"], "cpu")
+    assert list(heads) == ["trizod", "chezod"]
+    emb = np.zeros((1, 3, 1024), dtype=np.float32)
+    for head in heads.values():
+        assert score_embeddings(head, emb).shape[:2] == (1, 3)

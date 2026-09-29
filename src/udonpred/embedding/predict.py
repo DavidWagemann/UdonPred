@@ -8,7 +8,6 @@ on-the-fly embedding loop.
 """
 
 import argparse
-from pathlib import Path
 from time import perf_counter
 
 import torch
@@ -28,9 +27,9 @@ from udonpred.heads import resolve_model_dir, resolve_targets
 from udonpred.inference import (
     count_batches,
     iter_batches,
-    load_head,
+    load_heads,
+    require_policies,
     score_embeddings,
-    unknown_targets,
 )
 from udonpred.output import CaidWriter
 
@@ -48,16 +47,7 @@ def run_exported(
 ) -> None:
     """Run prediction using the HuggingFace backbone and ONNX prediction heads."""
     targets = resolve_targets(model_dir, target)
-
-    # Fail before loading the backbone if a requested head has no registered
-    # policy — its threshold is needed for the binary column, and its scale for
-    # --normalize.
-    unknown = unknown_targets(targets)
-    if unknown:
-        raise ValueError(
-            f"No policy registered for: {', '.join(unknown)}. Add it to "
-            "udonpred.inference.TARGET_POLICIES."
-        )
+    require_policies(targets)
 
     torch_device = resolve_device(device)
     torch_dtype = torch.float16 if torch_device == "cuda" else torch.float32
@@ -70,11 +60,8 @@ def run_exported(
 
     # Load every requested head once; each batch is embedded a single time and
     # the embeddings reused across all heads.
-    heads = {}
-    for name in targets:
-        onnx_path = Path(model_dir) / f"{name}.onnx"
-        print(f"Loading head ({onnx_path}) ...")
-        heads[name] = load_head(onnx_path, torch_device, threads=threads)
+    print(f"Loading heads ({', '.join(targets)}) from {model_dir} ...")
+    heads = load_heads(model_dir, targets, torch_device, threads=threads)
 
     total_batches = count_batches(entries, max_total_seq_len)
     with CaidWriter(

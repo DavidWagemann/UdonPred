@@ -5,7 +5,7 @@ from udonpred.inference import (
     TARGET_POLICIES,
     binarize_scores,
     normalize_scores,
-    unknown_targets,
+    require_policies,
 )
 
 
@@ -64,9 +64,10 @@ def test_unknown_target_raises():
         binarize_scores(np.zeros(3), "nonexistent")
 
 
-def test_unknown_targets_reports_only_unregistered():
-    assert unknown_targets(["trizod", "chezod"]) == []
-    assert unknown_targets(["trizod", "bogus", "nope"]) == ["bogus", "nope"]
+def test_require_policies_names_every_unregistered_target():
+    require_policies(["trizod", "chezod"])  # no error
+    with pytest.raises(ValueError, match="No policy registered for: bogus, nope"):
+        require_policies(["trizod", "bogus", "nope"])
 
 
 # --- binary column ------------------------------------------------------------
