@@ -1,19 +1,25 @@
 #!/bin/bash
 set -euo pipefail
 
+# Train the target x pLM matrix sequentially in a GPU container:
+#   SCRATCH=/local/disk scripts/docker/train.sh
+# SCRATCH (required) holds the venv and HF cache across runs; like the project
+# itself it must be on a local disk. Optional: IMAGE, MOUNT, GPUS, NETWORK,
+# WANDB_MODE.
+
 PROJECT="$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)"
 
 if [ "$(stat -f -c %T "$PROJECT" 2>/dev/null)" = nfs ]; then
   echo "ERROR: project is on NFS ($PROJECT). Docker's root daemon can't bind-mount" >&2
-  echo "root-squashed NFS. Run from a local disk instead, e.g.:" >&2
-  echo "  rsync -a $PROJECT/ /mnt/space/local/UdonPred/ && cd /mnt/space/local/UdonPred && scripts/docker/train.sh" >&2
+  echo "root-squashed NFS. Stage it onto a local disk first:" >&2
+  echo "  DEST=/local/disk/UdonPred scripts/docker/stage.sh && cd /local/disk/UdonPred && scripts/docker/train.sh" >&2
   exit 1
 fi
 
 IMAGE="${IMAGE:-nvcr.io/nvidia/pytorch:23.10-py3}"
 MOUNT="${MOUNT:-/mnt/udonpred}"
 GPUS="${GPUS:-all}"
-SCRATCH="${SCRATCH:-/mnt/space/local}"
+SCRATCH="${SCRATCH:?set SCRATCH to a local-disk directory for the venv + HF cache}"
 NETWORK="${NETWORK:-host}"
 
 export WANDB_MODE="${WANDB_MODE:-online}"

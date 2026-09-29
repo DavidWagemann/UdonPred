@@ -79,10 +79,12 @@ hyperparameter search). The data, training, and architecture settings live in `c
 `config/config.yaml`, and `config/architecture.yaml`. Set `min_length` in `config/config.yaml` to drop short
 proteins from training and evaluation.
 
-To train each target × pLM combination separately in a GPU container, use `scripts/slurm/train.sbatch` (a Slurm
-job array via enroot/pyxis; export `WANDB_API_KEY` first) or `scripts/docker/train.sh` (the same matrix via
+To train each target × pLM combination separately in a GPU container, submit
+`IMAGE=<enroot image> sbatch scripts/slurm/train.sbatch` from the repo root (a Slurm job array via enroot/pyxis;
+export `WANDB_API_KEY` first), or run `SCRATCH=<local dir> scripts/docker/train.sh` (the same matrix via
 `docker run --gpus`). Both run `scripts/run_training.sh`. With a root Docker daemon, run from a local disk rather
-than an NFS home; `scripts/docker/stage.sh` copies the working tree to local scratch.
+than an NFS home; `DEST=<local dir> scripts/docker/stage.sh` copies the working tree there. Each script's header
+lists its other overrides.
 
 Export the trained checkpoints to ONNX and publish them to the Hub in one step:
 ```

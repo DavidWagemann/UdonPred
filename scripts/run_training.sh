@@ -20,7 +20,7 @@ fi
 # reused across jobs that land on the same node. If /tmp is RAM-backed (tmpfs)
 # on these nodes, point SCRATCH at the node's local SSD instead (a multi-GB venv
 # + embeddings cache in RAM would be bad).
-SCRATCH="${SCRATCH:-/tmp/ge39reb3_udonpred}"
+SCRATCH="${SCRATCH:-/tmp/${USER:-$(id -un)}_udonpred}"
 export HF_HOME="$SCRATCH/hf"                   # downloaded embeddings .h5 + model config
 export UV_PROJECT_ENVIRONMENT="$SCRATCH/venv"  # project venv (torch, etc.)
 mkdir -p "$HF_HOME"
