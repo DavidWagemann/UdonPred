@@ -1,5 +1,6 @@
 import os
 import pickle
+import shutil
 import sqlite3
 from importlib import import_module
 from typing import Any, Dict, List, Optional, Tuple
@@ -534,7 +535,12 @@ def get_datasets(
                 .get("embeddings", {})
                 .get("source", "auto"),
             )
-            ds.save_to_disk(hf_path)
+            # Write under a temporary name and rename once complete, so a run
+            # killed mid-save never leaves a partial cache that looks loadable.
+            partial = f"{hf_path}.partial"
+            shutil.rmtree(partial, ignore_errors=True)
+            ds.save_to_disk(partial)
+            os.rename(partial, hf_path)
 
         if train_filter is not None and "train" in ds:
             ds["train"] = ds["train"].filter(lambda x: x["id"] in train_filter)
