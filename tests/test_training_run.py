@@ -255,6 +255,7 @@ def test_train_min_length_comes_from_env_and_tags_the_run(harness, monkeypatch):
     config = run.load_config()
     assert config["config"]["train_min_length"] == 25
     assert config["config"]["run_name"] == "chezod-prostt5-trainmin25"
+    assert config["config"]["experiment_tags"] == ["trainmin25"]
 
 
 def test_explicit_run_name_is_not_tagged(harness, monkeypatch):
