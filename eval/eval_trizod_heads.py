@@ -8,11 +8,11 @@ pooled, 999-masked convention the training metrics use.
 
 No pLM / torch needed: only onnxruntime + the precomputed embeddings.
 
-    uv run --extra hub python eval_trizod_heads.py
-    uv run --extra hub python eval_trizod_heads.py --smooth 1.5   # deployed post-proc
-    uv run --extra hub python eval_trizod_heads.py --min-length 50  # long proteins only
+    uv run --extra hub python eval/eval_trizod_heads.py
+    uv run --extra hub python eval/eval_trizod_heads.py --smooth 1.5   # deployed post-proc
+    uv run --extra hub python eval/eval_trizod_heads.py --min-length 50  # long proteins only
     # override a head with a local file or a repo:file@revision reference:
-    uv run --extra hub python eval_trizod_heads.py --new weights/trizod2.onnx
+    uv run --extra hub python eval/eval_trizod_heads.py --new weights/trizod2.onnx
 """
 
 import argparse
