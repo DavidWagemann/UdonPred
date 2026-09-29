@@ -12,7 +12,9 @@ import udonpred.heads as heads
 from udonpred.heads import (
     DEFAULT_HEADS_REPO,
     DEFAULT_HEADS_REVISION,
+    discover_targets,
     resolve_model_dir,
+    resolve_targets,
 )
 
 
@@ -78,3 +80,35 @@ def test_env_overrides_repo_and_revision(monkeypatch, capture_download):
 def test_explicit_revision_beats_default(clean_env, capture_download):
     resolve_model_dir(None, revision="main")
     assert capture_download == [(DEFAULT_HEADS_REPO, "main")]
+
+
+# ---- target discovery / validation -------------------------------------------
+
+@pytest.fixture
+def heads_dir(tmp_path):
+    for name in ("trizod", "chezod", "atlas"):
+        (tmp_path / f"{name}.onnx").write_bytes(b"")
+    (tmp_path / "README.md").write_text("not a head")
+    return tmp_path
+
+
+def test_discover_targets_lists_onnx_stems_sorted(heads_dir):
+    assert discover_targets(heads_dir) == ["atlas", "chezod", "trizod"]
+
+
+def test_resolve_targets_expands_all(heads_dir):
+    assert resolve_targets(heads_dir, ["all"]) == ["atlas", "chezod", "trizod"]
+
+
+def test_resolve_targets_keeps_requested_order(heads_dir):
+    assert resolve_targets(heads_dir, ["trizod", "atlas"]) == ["trizod", "atlas"]
+
+
+def test_resolve_targets_rejects_missing_head(heads_dir):
+    with pytest.raises(ValueError, match="ONNX head not found"):
+        resolve_targets(heads_dir, ["trizod", "plddt"])
+
+
+def test_resolve_all_in_empty_dir_raises(tmp_path):
+    with pytest.raises(ValueError, match="No .onnx heads found"):
+        resolve_targets(tmp_path, ["all"])

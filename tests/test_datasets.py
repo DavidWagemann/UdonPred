@@ -82,3 +82,34 @@ def test_resolve_split_file_builds_path(capture_download):
     assert capture_download == [
         (DEFAULT_DATASET_REPO, "chezod/train.fasta", DEFAULT_DATASET_REVISION)
     ]
+
+
+@pytest.fixture
+def dataset_env(monkeypatch):
+    monkeypatch.setenv("UDONPRED_DATASET_REPO", "myorg/data")
+    monkeypatch.setenv("UDONPRED_DATASET_REVISION", "v1")
+
+
+def test_resolve_embeddings_honors_env_overrides(dataset_env, capture_download):
+    resolve_embeddings("trizod", "test", "prostt5")
+    assert capture_download == [("myorg/data", "trizod/embeddings/prostt5/test.h5", "v1")]
+
+
+def test_resolve_split_file_honors_env_overrides(dataset_env, capture_download):
+    resolve_split_file("trizod", "valid")
+    assert capture_download == [("myorg/data", "trizod/valid.jsonl", "v1")]
+
+
+def test_explicit_repo_and_revision_beat_env(dataset_env, capture_download):
+    resolve_embeddings("trizod", "test", "prostt5", repo="other/data", revision="main")
+    resolve_split_file("trizod", "test", repo="other/data", revision="main")
+    assert capture_download == [
+        ("other/data", "trizod/embeddings/prostt5/test.h5", "main"),
+        ("other/data", "trizod/test.jsonl", "main"),
+    ]
+
+
+def test_ref_revision_is_not_affected_by_dataset_env(dataset_env, capture_download):
+    # a Hub reference names its own repo; only its revision falls back to the default
+    resolve_embeddings_ref("org/name:a/b.h5")
+    assert capture_download == [("org/name", "a/b.h5", DEFAULT_DATASET_REVISION)]

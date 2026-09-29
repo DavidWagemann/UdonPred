@@ -1,7 +1,4 @@
-from pathlib import Path
-
 import numpy as np
-import pytest
 
 from udonpred.inference import (
     count_batches,
@@ -10,8 +7,6 @@ from udonpred.inference import (
     score_embeddings,
     smooth_scores,
 )
-
-WEIGHTS = Path(__file__).resolve().parent.parent / "weights"
 
 
 def test_smooth_scores_preserves_length_and_disabled_passthrough():
@@ -33,8 +28,31 @@ def test_iter_and_count_batches_agree():
     assert flat == ["a", "b", "c"]
 
 
-def test_score_embeddings_real_head_shape_and_range():
-    head = load_head(WEIGHTS / "trizod.onnx", "cpu")
+def _batch_headers(items, max_total_len):
+    return [[h for h, _ in batch] for batch in iter_batches(items, max_total_len)]
+
+
+def test_iter_batches_starts_a_new_batch_before_exceeding_the_cap():
+    items = [("a", "X" * 1500), ("b", "X" * 600), ("c", "X" * 600)]
+    assert _batch_headers(items, 2000) == [["a"], ["b", "c"]]
+
+
+def test_iter_batches_closes_a_batch_that_hits_the_cap_exactly():
+    items = [("a", "X" * 1000), ("b", "X" * 1000), ("c", "X" * 5)]
+    assert _batch_headers(items, 2000) == [["a", "b"], ["c"]]
+
+
+def test_iter_batches_gives_an_oversized_sequence_its_own_batch():
+    items = [("s", "X" * 10), ("big", "X" * 5000), ("t", "X" * 10)]
+    assert _batch_headers(items, 2000) == [["s"], ["big"], ["t"]]
+
+
+def test_iter_batches_of_nothing_is_empty():
+    assert _batch_headers([], 2000) == []
+
+
+def test_score_embeddings_real_head_shape_and_range(weights_dir):
+    head = load_head(weights_dir / "trizod.onnx", "cpu")
     emb = np.random.randn(1, 10, 1024).astype(np.float32)
     scores = score_embeddings(head, emb)
     # one batch item, 10 residues
