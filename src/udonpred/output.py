@@ -1,4 +1,4 @@
-"""Shared per-residue post-processing and CAID output writing.
+"""Shared per-residue post-processing, ``.caid`` formatting, and output writing.
 
 Every runner turns a head's raw output into the same CAID artifacts, so that
 chain lives here rather than in any one runner. Nothing in this module imports
@@ -6,14 +6,15 @@ chain lives here rather than in any one runner. Nothing in this module imports
 """
 
 import csv
+import re
 import sys
 import time
+from collections.abc import Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
 
-from udonpred.fasta import format_predictions, safe_filename
 from udonpred.inference import binarize_scores, normalize_scores, smooth_scores
 
 # Banner line opening every timings.csv. Deliberately carries no timestamp, so
@@ -42,6 +43,40 @@ def postprocess_scores(
     if normalize:
         scores = normalize_scores(scores, target)
     return scores, binary
+
+
+def _unwrap(row):
+    """Take the scalar out of a ``(1,)``-shaped per-residue row."""
+    if hasattr(row, "__len__") and not isinstance(row, str):
+        return row[0] if len(row) > 0 else 0.0
+    return row
+
+
+def safe_filename(header: str) -> str:
+    """Turn a FASTA header into a filename-safe stem.
+
+    Path separators, pipes, and whitespace are replaced rather than stripped, so
+    no two distinct headers collapse onto the same file.
+    """
+    return re.sub(r"\s+", "_", header.replace("/", "_").replace("|", "_")).strip("_")
+
+
+def format_predictions(
+    header: str,
+    sequence: str,
+    scores: Sequence,
+    binary: Sequence | None = None,
+) -> list[str]:
+    """Format per-residue scores into CAID ``.caid`` lines.
+
+    Each line is ``<index>\t<residue>\t<score:.3f>\t<binary>``, preceded by a
+    ``>header`` line. Omitting ``binary`` leaves the fourth column empty.
+    """
+    lines: list[str] = [f">{header}\n"]
+    for idx, (aa, row) in enumerate(zip(sequence, scores), start=1):
+        call = "" if binary is None else str(int(_unwrap(binary[idx - 1])))
+        lines.append(f"{idx}\t{aa}\t{float(_unwrap(row)):.3f}\t{call}\n")
+    return lines
 
 
 class CaidWriter:
