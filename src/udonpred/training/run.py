@@ -310,6 +310,13 @@ def load_config(config_dir: str | None = None) -> dict:
             )
         for name in config["data"]:
             config["data"][name]["fraction"] = 1 if name == target else 0
+    # A target's output activation lives with its data (a sigmoid for [0, 1]
+    # labels, none for unbounded regressions), so with a single dataset active
+    # its `post` replaces the config-wide one.
+    active = [name for name, data in config["data"].items() if data["fraction"] > 0]
+    if len(active) == 1 and "post" in config["data"][active[0]]:
+        post = config["data"][active[0]]["post"]
+        config["config"]["post"] = {head: post for head in config["config"]["heads"]}
     # Run name (drives the W&B run name + checkpoint dir): an explicit
     # UDONPRED_RUN_NAME wins, else derive <target>-<plm> when both are known.
     plm = config["config"].get("embeddings", {}).get("plm")

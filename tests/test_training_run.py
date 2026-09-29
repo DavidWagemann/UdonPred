@@ -73,7 +73,7 @@ CONFIG = {
     "data": {
         "trizod": {"path": "data/split/trizod", "fraction": 1,
                    "losses": {"y": [LOSS]}, "metrics": {"y": [LOSS]}},
-        "chezod": {"path": "data/split/chezod", "fraction": 0,
+        "chezod": {"path": "data/split/chezod", "fraction": 0, "post": [],
                    "losses": {"y": [LOSS]}, "metrics": {"y": [LOSS]}},
     },
     "architecture": {
@@ -229,6 +229,14 @@ def test_env_selects_a_single_target_and_names_the_run(harness, monkeypatch):
     assert config["config"]["embeddings"]["plm"] == "frustraiseq"
     assert config["config"]["run_name"] == "chezod-frustraiseq"
     assert trainer.kwargs["args"].output_dir == "checkpoints/chezod-frustraiseq"
+
+
+def test_a_single_target_brings_its_own_output_activation(harness, monkeypatch):
+    # chezod is an unbounded regression: its data entry drops the config-wide Sigmoid
+    monkeypatch.setenv("UDONPRED_TARGET", "chezod")
+    run.run("train")
+    (call,) = harness["load_model"]
+    assert _layer_types(call.heads["out"]) == ["Sequential", "Linear", "LeakyReLU", "Linear"]
 
 
 def test_explicit_run_name_wins(harness, monkeypatch):

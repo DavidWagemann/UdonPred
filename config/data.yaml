@@ -1,10 +1,13 @@
 # Each dataset's `path` basename (e.g. "trizod") doubles as the Hub config/target
 # name under udonpred/datasets, used to fetch precomputed embeddings when
 # config.embeddings.source is "auto"/"hub".
+# `post` is the target's output activation: a sigmoid for [0, 1] labels, none
+# for unbounded regressions. It replaces config.post when training one target.
 
 trizod:
   path: "data/split/trizod"
   fraction: 1
+  post: [[torch.nn.Sigmoid, {}]]
   losses:
     y:
       - class: udonpred.training.model.losses.MSE
@@ -27,6 +30,7 @@ trizod:
 chezod:
   path: "data/split/chezod"
   fraction: 0
+  post: []
   losses:
     y:
       - class: udonpred.training.model.losses.MSE
@@ -49,6 +53,7 @@ chezod:
 disprot:
   path: "data/split/disprot"
   fraction: 0
+  post: [[torch.nn.Sigmoid, {}]]
   losses:
     y:
       - class: udonpred.training.model.losses.BCE
@@ -71,6 +76,7 @@ disprot:
 pdbflex:
   path: "data/split/pdbflex"
   fraction: 0
+  post: []
   losses:
     y:
       - class: udonpred.training.model.losses.MSE
@@ -93,6 +99,7 @@ pdbflex:
 plddt:
   path: "data/split/plddt"
   fraction: 0
+  post: []
   losses:
     y:
       - class: udonpred.training.model.losses.MSE
@@ -115,6 +122,7 @@ plddt:
 softdis:
   path: "data/split/softdis"
   fraction: 0
+  post: [[torch.nn.Sigmoid, {}]]
   losses:
     y:
       - class: udonpred.training.model.losses.MSE
@@ -137,6 +145,7 @@ softdis:
 atlas:
   path: "data/split/atlas"
   fraction: 0
+  post: []
   losses:
     y:
       - class: udonpred.training.model.losses.MSE
