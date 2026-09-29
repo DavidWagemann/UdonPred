@@ -47,7 +47,7 @@ chezod:
         arguments: []
 
 disprot:
-  path: "data/disprot"
+  path: "data/split/disprot"
   fraction: 0
   losses:
     y:
@@ -69,7 +69,7 @@ disprot:
         arguments: []
 
 pdbflex:
-  path: "data/pdbflex"
+  path: "data/split/pdbflex"
   fraction: 0
   losses:
     y:
@@ -91,7 +91,7 @@ pdbflex:
         arguments: []
 
 plddt:
-  path: "data/plddt"
+  path: "data/split/plddt"
   fraction: 0
   losses:
     y:
@@ -113,7 +113,7 @@ plddt:
         arguments: []
 
 softdis:
-  path: "data/softdis"
+  path: "data/split/softdis"
   fraction: 0
   losses:
     y:
@@ -135,7 +135,7 @@ softdis:
         arguments: []
 
 atlas:
-  path: "data/atlas"
+  path: "data/split/atlas"
   fraction: 0
   losses:
     y:
