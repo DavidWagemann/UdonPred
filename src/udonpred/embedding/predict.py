@@ -1,14 +1,9 @@
 """Standard UdonPred runner: embeds sequences with ProstT5 on the fly.
 
-This is the original, self-contained predictor — it loads the ProstT5 backbone
-and computes embeddings itself. For the CAID4-compliant runner that consumes
-precomputed embeddings (no PLM in the container), see
-:mod:`udonpred.caid.predict`.
-
-Both runners share the FASTA, ONNX-head, post-processing, output, and CLI logic
-in the ``udonpred`` package, and write the identical CAID layout: one directory
-per prediction head, holding one ``{protein}.caid`` file per input protein, whose
-rows are ``<index>\\t<residue>\\t<score>\\t<binary>``. This script only adds the
+The FASTA, ONNX-head, post-processing, output, and CLI logic live in the shared
+``udonpred`` modules; output is one directory per prediction head, holding one
+``{protein}.caid`` file per input protein, whose rows are
+``<index>\\t<residue>\\t<score>\\t<binary>``. This script only adds the
 on-the-fly embedding loop.
 """
 

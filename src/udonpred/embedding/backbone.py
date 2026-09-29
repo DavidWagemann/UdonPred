@@ -3,12 +3,8 @@
 This is the *online* embedding path used by the on-the-fly runner
 (:mod:`udonpred.embedding.predict`) and the ``udonpred-embed`` helper
 (:mod:`udonpred.utils.embed`). It is deliberately isolated from the rest of
-:mod:`udonpred` so that the CAID runner (:mod:`udonpred.caid.predict`) can
-import the FASTA and ONNX-head helpers without pulling in
-``torch``/``transformers`` or the protein language model itself.
-
-Importing this module requires ``torch`` and ``transformers``; the CAID
-container does not install them.
+:mod:`udonpred` so the FASTA and ONNX-head helpers stay importable without
+``torch``/``transformers``. Importing this module requires both.
 """
 
 from importlib import import_module

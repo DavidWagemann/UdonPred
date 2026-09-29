@@ -1,10 +1,8 @@
 """Shared per-residue post-processing and CAID output writing.
 
-Both runners -- the CAID precomputed-embedding one
-(:mod:`udonpred.caid.predict`) and the on-the-fly one
-(:mod:`udonpred.embedding.predict`) -- turn a head's raw output into the same
-CAID artefacts, so that chain lives here rather than in either runner. Nothing
-in this module imports ``torch``, keeping the lean CAID import boundary intact.
+Every runner turns a head's raw output into the same CAID artifacts, so that
+chain lives here rather than in any one runner. Nothing in this module imports
+``torch``, keeping the lean core torch-free.
 """
 
 import csv

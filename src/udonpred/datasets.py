@@ -3,8 +3,8 @@
 Datasets live in the public Hugging Face dataset repo ``udonpred/datasets``
 (one config per target; embeddings under ``<target>/embeddings/<plm>/``). This
 module is the lean consume side: pure path logic plus a lazily-imported
-``huggingface_hub`` download, so the CAID inference path stays torch- and
-hub-free until a Hub file is actually fetched. Uploading lives in
+``huggingface_hub`` download, so the inference core stays torch- and hub-free
+until a Hub file is actually fetched. Uploading lives in
 :mod:`udonpred.utils.publish`.
 """
 

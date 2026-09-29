@@ -1,8 +1,7 @@
 """ONNX prediction-head loading, scoring, batching, smoothing, and normalization.
 
 This module is backbone-agnostic: it operates purely on per-residue embedding
-arrays, so it is shared by both the on-the-fly runner and the CAID
-precomputed-embedding runner.
+arrays, so it serves any runner regardless of where the embeddings come from.
 """
 
 from collections.abc import Iterable

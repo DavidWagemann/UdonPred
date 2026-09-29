@@ -1,9 +1,9 @@
-"""Argument definitions shared by the two prediction runners.
+"""Argument definitions shared by the prediction runners.
 
-:mod:`udonpred.caid.predict` and :mod:`udonpred.embedding.predict` take the same
-inputs and produce the same CAID output, differing only in where the embeddings
-come from. The flags describing that shared contract are defined here once and
-pulled in as a parent parser, so the two CLIs cannot drift apart.
+Every runner takes the same inputs and writes the same ``.caid`` output,
+differing only in where the embeddings come from. The flags describing that
+contract are defined here once and pulled in as a parent parser, so runners
+cannot drift apart.
 """
 
 import argparse
@@ -18,8 +18,8 @@ def common_parser(
     """Build the parent parser holding every flag both runners share.
 
     Args:
-        device_choices: Accepted ``--device`` values. The CAID runner is
-            CPU/CUDA only, while the on-the-fly runner also accepts ``auto``.
+        device_choices: Accepted ``--device`` values (e.g. the on-the-fly
+            runner also accepts ``auto``).
         device_default: Default ``--device`` value.
     """
     parser = argparse.ArgumentParser(add_help=False)

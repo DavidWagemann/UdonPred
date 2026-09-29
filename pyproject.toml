@@ -1,13 +1,13 @@
 [project]
 name = "udonpred-comp"
 version = "0.1.0"
-description = "Protein disorder prediction from ProstT5 embeddings (UdonPred, CAID4)"
+description = "Protein disorder prediction from ProstT5 embeddings (UdonPred)"
 readme = "README.md"
 requires-python = ">=3.13"
 
-# Lean, inference-only core: this is all the CAID4 predictor needs. It is
-# deliberately torch-free and mirrors requirements-caid.txt. Heavy stacks live
-# in the optional extras below so `pip install udonpred-comp` stays small.
+# Lean, torch-free inference core (ONNX heads on precomputed embeddings). Heavy
+# stacks live in the optional extras below so `pip install udonpred-comp` stays
+# small.
 dependencies = [
     "numpy>=2.0,<3",
     "scipy>=1.13",
@@ -44,7 +44,7 @@ training = [
     "biopython>=1.86",
 ]
 # Pull prediction heads from the Hugging Face Hub (udonpred/prediction-heads).
-# Not needed by the CAID container, which consumes heads baked in at build time.
+# Not needed when heads are passed as a local directory.
 hub = ["huggingface_hub>=0.25"]
 
 [dependency-groups]
@@ -57,8 +57,6 @@ dev = [
 ]
 
 [project.scripts]
-# Inference (lean core).
-udonpred-caid = "udonpred.caid.predict:main"
 # On-the-fly predictor / embedding generation (needs [embedding]).
 udonpred-predict = "udonpred.embedding.predict:main"
 udonpred-embed = "udonpred.utils.embed:main"

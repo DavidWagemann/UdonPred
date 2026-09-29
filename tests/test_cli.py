@@ -3,14 +3,13 @@
 The on-the-fly runner pulls torch in at import time, so its own parser can only
 be exercised where the ``embedding`` extra is installed
 (see ``tests/test_embedding_backbone.py``). These tests cover the shared parent
-parser itself, which is what keeps the two CLIs from drifting apart.
+parser itself, which is what keeps runners from drifting apart.
 """
 
 import argparse
 
 import pytest
 
-from udonpred.caid.predict import build_parser as caid_parser
 from udonpred.cli import common_parser
 
 SHARED_FLAGS = {
@@ -38,12 +37,6 @@ def test_common_parser_defines_every_shared_flag():
     assert SHARED_FLAGS <= _flags(parser)
 
 
-def test_caid_parser_inherits_the_shared_flags():
-    # the CAID runner adds only --embeddings on top of the shared contract
-    assert SHARED_FLAGS <= _flags(caid_parser())
-    assert "--embeddings" in _flags(caid_parser())
-
-
 def test_shared_defaults():
     parser = common_parser(device_choices=["cpu", "cuda"], device_default="cpu")
     args = parser.parse_args(["in.fasta"])
@@ -57,14 +50,14 @@ def test_shared_defaults():
 
 
 def test_device_choices_are_per_runner():
-    caid = common_parser(device_choices=["cpu", "cuda"], device_default="cpu")
+    cpu_only = common_parser(device_choices=["cpu", "cuda"], device_default="cpu")
     on_the_fly = common_parser(
         device_choices=["auto", "cpu", "cuda"], device_default="auto"
     )
     assert on_the_fly.parse_args(["in.fasta"]).device == "auto"
     assert on_the_fly.parse_args(["in.fasta", "-d", "auto"]).device == "auto"
     with pytest.raises(SystemExit):
-        caid.parse_args(["in.fasta", "-d", "auto"])
+        cpu_only.parse_args(["in.fasta", "-d", "auto"])
 
 
 def test_normalize_is_a_boolean_optional_flag():

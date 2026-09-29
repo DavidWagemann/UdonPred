@@ -85,12 +85,3 @@ def test_default_revision_is_the_seven_head_submission_set():
     from udonpred.heads import DEFAULT_HEADS_REVISION
 
     assert DEFAULT_HEADS_REVISION == "v0.1.0"
-
-
-def test_default_revision_matches_the_dockerfile_pin():
-    from pathlib import Path
-
-    from udonpred.heads import DEFAULT_HEADS_REVISION
-
-    dockerfile = (Path(__file__).resolve().parent.parent / "Dockerfile").read_text()
-    assert f"ARG HEADS_REVISION={DEFAULT_HEADS_REVISION}" in dockerfile

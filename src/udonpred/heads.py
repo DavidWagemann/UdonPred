@@ -2,12 +2,10 @@
 
 The heads live in the public Hugging Face repo ``udonpred/prediction-heads``
 (the seven ``*.onnx`` files of the pinned release, tagged per release). Inference can consume them
-either from a local directory (e.g. the weights baked into the CAID container)
-or by downloading a pinned revision from the Hub.
+either from a local directory or by downloading a pinned revision from the Hub.
 
-Only the download path imports :mod:`huggingface_hub`, so purely-local use --
-the CAID container passing its baked-in ``weights/`` -- stays hub-free and needs
-no network access. Publishing new heads after (re)training lives in
+Only the download path imports :mod:`huggingface_hub`, so purely-local use stays
+hub-free and needs no network access. Publishing new heads after (re)training lives in
 :mod:`udonpred.utils.export`.
 """
 

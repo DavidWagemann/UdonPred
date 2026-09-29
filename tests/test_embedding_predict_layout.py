@@ -3,8 +3,7 @@
 ``udonpred.embedding.predict`` imports torch at module scope and would otherwise
 need the ProstT5 weights, so torch is stubbed and the backbone helpers are
 replaced with random embeddings. The ONNX heads are real, so this exercises the
-actual scoring, post-processing, and writing path — the part shared with the
-CAID runner.
+actual scoring, post-processing, and writing path.
 """
 
 import contextlib
@@ -62,7 +61,7 @@ def test_on_the_fly_runner_writes_the_caid_layout(
     )
 
     out = tmp_path / "out"
-    # same layout as the CAID runner: {target}/{protein}.caid
+    # CAID layout: {target}/{protein}.caid
     for target in ("trizod", "chezod"):
         assert sorted(p.name for p in (out / target).glob("*.caid")) == [
             "P04637.caid",
