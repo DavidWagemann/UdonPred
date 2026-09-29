@@ -153,7 +153,8 @@ def harness(tmp_path, monkeypatch):
     workdir.mkdir()
     monkeypatch.chdir(workdir)
     monkeypatch.setattr(run, "CONFIG_DIR", str(config_dir))
-    for var in ("UDONPRED_TARGET", "UDONPRED_EMBEDDINGS_PLM", "UDONPRED_RUN_NAME"):
+    for var in ("UDONPRED_TARGET", "UDONPRED_EMBEDDINGS_PLM", "UDONPRED_RUN_NAME",
+                "UDONPRED_TRAIN_MIN_LENGTH"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "")
     monkeypatch.delenv("WANDB_PROJECT", raising=False)
@@ -245,6 +246,21 @@ def test_explicit_run_name_wins(harness, monkeypatch):
     monkeypatch.setenv("UDONPRED_RUN_NAME", "custom")
     run.run("train")
     assert FakeTrainer.instances[0].config["config"]["run_name"] == "custom"
+
+
+def test_train_min_length_comes_from_env_and_tags_the_run(harness, monkeypatch):
+    monkeypatch.setenv("UDONPRED_TARGET", "chezod")
+    monkeypatch.setenv("UDONPRED_EMBEDDINGS_PLM", "prostt5")
+    monkeypatch.setenv("UDONPRED_TRAIN_MIN_LENGTH", "25")
+    config = run.load_config()
+    assert config["config"]["train_min_length"] == 25
+    assert config["config"]["run_name"] == "chezod-prostt5-trainmin25"
+
+
+def test_explicit_run_name_is_not_tagged(harness, monkeypatch):
+    monkeypatch.setenv("UDONPRED_TRAIN_MIN_LENGTH", "50")
+    monkeypatch.setenv("UDONPRED_RUN_NAME", "custom")
+    assert run.load_config()["config"]["run_name"] == "custom"
 
 
 def test_unknown_target_is_rejected(harness, monkeypatch):

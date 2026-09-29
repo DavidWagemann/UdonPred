@@ -47,6 +47,9 @@ filter: False
 # Minimum protein length (residues) to train/validate/test on; 0 keeps all.
 # e.g. 50 or 100 to restrict to longer proteins, dropping short peptides.
 min_length: 0
+# Experiment: drop proteins shorter than this from the train split only (0 = off),
+# keeping valid/test complete. Overridden by UDONPRED_TRAIN_MIN_LENGTH.
+train_min_length: 0
 
 # Hyperparameter configuration
 hyperparameter_path: config/architecture.yaml

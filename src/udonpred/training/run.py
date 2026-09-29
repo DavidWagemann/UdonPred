@@ -324,6 +324,12 @@ def load_config(config_dir: str | None = None) -> dict:
         config["config"]["run_name"] = os.environ["UDONPRED_RUN_NAME"]
     elif target and plm:
         config["config"]["run_name"] = f"{target}-{plm}"
+    # Experiment: train-only min-length filter, tagged onto a derived run name.
+    if os.environ.get("UDONPRED_TRAIN_MIN_LENGTH"):
+        config["config"]["train_min_length"] = int(os.environ["UDONPRED_TRAIN_MIN_LENGTH"])
+    train_min_length = config["config"].get("train_min_length", 0)
+    if train_min_length and not os.environ.get("UDONPRED_RUN_NAME"):
+        config["config"]["run_name"] += f"-trainmin{train_min_length}"
 
     # Resolve the hyperparameter file relative to the packaged config dir when it
     # isn't found relative to the cwd, so training runs from any directory.

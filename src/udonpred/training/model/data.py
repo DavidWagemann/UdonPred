@@ -492,6 +492,9 @@ def get_datasets(
     # every split below so training and its valid/test metrics use the same
     # length-restricted population.
     min_length = config["config"].get("min_length", 0)
+    # Experiment: drop short proteins from the train split only, so valid/test
+    # (early stopping and the reported metrics) stay the baseline's.
+    train_min_length = config["config"].get("train_min_length", 0)
 
     backbone_model = Embedder(
         backbone_name=backbone_config["name"],
@@ -544,6 +547,16 @@ def get_datasets(
                 ds[split] = ds[split].filter(
                     lambda row: meets_min_length(row, min_length)
                 )
+
+        if train_min_length and "train" in ds:
+            before = len(ds["train"])
+            ds["train"] = ds["train"].filter(
+                lambda row: meets_min_length(row, train_min_length)
+            )
+            print(
+                f"{key}: train_min_length={train_min_length} keeps "
+                f"{len(ds['train'])}/{before} train proteins"
+            )
 
         datasets.append(ds)
 
